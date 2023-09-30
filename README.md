@@ -12,6 +12,10 @@ Built using `asyncio`, `aiohttp`, and `tqdm`
 - Upload logging
 
 ## Usage
+1. Make sure you're using python 3.8+
+2. Download the script from `src/gofile_uploader/main.py`
+3. Ensure you have `tqdm` and `aiohttp` packages in your python environment
+
 ```
 usage: GofileIOUploader [-h] [-t TOKEN] [-f FOLDER] [-c CONNECTIONS] [--public | --no-public] [--save | --no-save] file
 
