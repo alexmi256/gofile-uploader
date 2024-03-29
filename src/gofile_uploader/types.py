@@ -1,4 +1,4 @@
-from typing import Literal, TypedDict, Union, Optional
+from typing import Literal, Optional, TypedDict, Union
 
 
 class ServerResponse(TypedDict):

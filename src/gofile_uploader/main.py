@@ -1,13 +1,13 @@
 import argparse
 import asyncio
-import json
+import csv
 import logging
 import os
 import time
 from io import BufferedReader
 from pathlib import Path
 from pprint import pformat, pprint
-from typing import Callable, Literal, Optional, Union
+from typing import Callable, Literal, Optional
 
 import aiohttp
 from tqdm import tqdm
@@ -164,11 +164,12 @@ class GofileIOAPI:
                 raise Exception(response)
             return response["data"]
 
-    async def upload_file(self, file_path: Path, folder_id: Optional[str] = None, tqdm_index=1) -> str:
+    async def upload_file(self, file_path: Path, folder_id: Optional[str] = None, tqdm_index=1) -> list[str]:
         async with self.sem:
             retries = 0
             while retries < 3:
                 try:
+                    # TODO: Rate limit to one request every 10 seconds
                     servers = await self.get_servers(zone=self.zone)
 
                     server = next(iter(servers["data"]["servers"]))["name"]
@@ -191,7 +192,9 @@ class GofileIOAPI:
                                 logger.debug(f'File {file_path.name} will be uploaded to folder id "{folder_id}"')
                                 data.add_field("folderId", folder_id)
                             else:
-                                logger.debug(f'File {file_path.name} will be uploaded to a new randomly created folder id')
+                                logger.debug(
+                                    f"File {file_path.name} will be uploaded to a new randomly created folder id"
+                                )
 
                             async with session.post("/contents/uploadfile", data=data) as resp:
                                 response = await resp.json()
@@ -199,13 +202,13 @@ class GofileIOAPI:
                                     raise Exception(
                                         f'File {file_path.name} failed upload load due to missing or not "ok" status in response:\n{pformat(response)}'
                                     )
-                                return f"{response['data']['fileName']} uploaded to {response['data']['downloadPage']}"
+                                return [response["data"]["fileName"], response["data"]["downloadPage"]]
 
                 except Exception as e:
                     retries += 1
                     logger.error(f"Failed to upload {file_path} due to:\n", exc_info=e)
 
-    async def upload_files(self, paths: list[Path], folder_id: Optional[str] = None) -> list[dict]:
+    async def upload_files(self, paths: list[Path], folder_id: Optional[str] = None) -> list[list[str]]:
         try:
             tasks = [self.upload_file(test_file, folder_id, i + 1) for i, test_file in enumerate(paths)]
             responses = await tqdm_asyncio.gather(*tasks, desc="Files uploaded")
@@ -276,10 +279,11 @@ class GofileIOUploader:
 
         responses = await self.api.upload_files(paths, folder_id)
         if save:
-            file_name = f"gofile_upload_{int(time.time())}.json"
-            with open(file_name, "w+") as saved_file:
-                logger.info(f"Save uploaded files to {file_name}")
-                json.dump(responses, saved_file, indent=4)
+            file_name = f"gofile_upload_{int(time.time())}.csv"
+            with open(file_name, "w", newline="") as csvfile:
+                logger.info(f"Saving uploaded files to {file_name}")
+                csv_writer = csv.writer(csvfile, dialect="excel")
+                csv_writer.writerows(responses)
         else:
             pprint(responses)
 
