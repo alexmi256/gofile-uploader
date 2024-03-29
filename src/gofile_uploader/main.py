@@ -7,119 +7,24 @@ import time
 from io import BufferedReader
 from pathlib import Path
 from pprint import pformat, pprint
-from typing import Callable, Literal, TypedDict, Union
+from typing import Callable, Literal, Optional, Union
 
 import aiohttp
 from tqdm import tqdm
 from tqdm.asyncio import tqdm_asyncio
 
+from src.gofile_uploader.types import (
+    CreateFolderData,
+    GetAccountDetailsResponse,
+    GetAccountIdResponse,
+    GetContentResponse,
+    GetServersResponse,
+    UpdateContentOption,
+    UpdateContentOptionValue,
+)
+
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.WARNING)
-
-
-class ServerResponse(TypedDict):
-    status: str
-
-
-class CreateFolderData(TypedDict):
-    id: str
-    type: str
-    name: str
-    parentFolder: str
-    createTime: int
-    childs: list[str]
-    code: str
-
-
-class CreateFolderResponse(ServerResponse):
-    data: CreateFolderData
-
-
-class GetAccountDetailsData(TypedDict):
-    token: str
-    email: str
-    tier: str
-    rootFolder: str
-    filesCount: int
-    total30DDLTraffic: int
-    credit: int
-    currency: str
-    currencySign: str
-
-
-class GetAccountDetailsResponse(ServerResponse):
-    data: GetAccountDetailsData
-
-
-class GetContentIndividualContent(TypedDict):
-    id: str
-    type: str
-    name: str
-    parentFolder: str
-    createTime: int
-    size: int
-    downloadCount: int
-    md5: str
-    mimetype: str
-    serverChoosen: str
-    directLink: str
-    link: str
-
-
-class GetContentData(TypedDict):
-    isOwner: bool
-    id: str
-    type: str
-    name: str
-    parentFolder: str
-    code: str
-    createTime: int
-    public: bool
-    childs: list[str]
-    totalDownloadCount: int
-    totalSize: int
-    contents: dict[str, GetContentIndividualContent]
-
-
-class GetContentResponse(ServerResponse):
-    data: GetContentData
-
-
-SetOptionOption = Literal["public", "password", "description", "expire", "tags", "directLink"]
-
-
-"""
-For "public", can be "true" or "false". The contentId must be a folder.
-For "password", must be the password. The contentId must be a folder.
-For "description", must be the description. The contentId must be a folder.
-For "expire", must be the expiration date in the form of unix timestamp. The contentId must be a folder.
-For "tags", must be a comma seperated list of tags. The contentId must be a folder.
-For "directLink", can be "true" or "false". The contentId must be a file.
-"""
-SetOptionValue = Union[str, int, list[str]]
-
-
-class UploadFileData(TypedDict):
-    guestToken: str
-    downloadPage: str
-    code: str
-    parentFolder: str
-    fileId: str
-    fileName: str
-    md5: str
-
-
-class UploadFileResponse(ServerResponse):
-    data: UploadFileData
-
-
-class GofileCLIArgs(TypedDict):
-    file: str
-    token: Union[str, None]
-    folder: Union[str, None]
-    connections: int
-    public: bool
-    no_save: bool
+logging.basicConfig(level=logging.DEBUG)
 
 
 class ProgressFileReader(BufferedReader):
@@ -158,10 +63,15 @@ class TqdmUpTo(tqdm):
 
 
 class GofileIOAPI:
-    def __init__(self, token: Union[str, None] = None, max_connections: int = 4):
+    def __init__(
+        self, token: Union[str, None] = None, max_connections: int = 4, zone: Optional[Literal["eu", "na"]] = None
+    ):
         self.token = token
-        self.session = aiohttp.ClientSession("https://api.gofile.io")
+        self.session_headers = {"Authorization": f"Bearer {self.token}"} if self.token else None
+        self.session = aiohttp.ClientSession("https://api.gofile.io", headers=self.session_headers)
+        self.zone = zone
         self.root_folder_id = None
+        self.account_id = None
         self.is_premium = False
         self.make_public = False
         self.server_sessions = {}
@@ -169,8 +79,11 @@ class GofileIOAPI:
         self.sem = asyncio.Semaphore(max_connections)
 
     async def init(self):
+        account_id = await self.get_account_id()
+        self.account_id = account_id["data"]["id"]
+
         if self.token is not None:
-            account = await self.get_account_details()
+            account = await self.get_account_details(self.account_id)
             self.root_folder_id = account["data"]["rootFolder"]
             self.is_premium = account["data"]["tier"] != "standard"
 
@@ -183,52 +96,69 @@ class GofileIOAPI:
         if self.is_premium is False:
             raise Exception(f"Account tier is standard but needs to be premium")
 
-    async def get_server(self) -> str:
-        async with self.session.get("/getServer") as resp:
+    async def get_servers(self, zone: Optional[Literal["eu", "na"]]) -> GetServersResponse:
+        params = {"zone": zone} if zone else None
+        async with self.session.get("/servers", params=params) as resp:
             response = await resp.json()
             if "status" not in response or response["status"] != "ok":
                 logger.error(pformat(response))
                 raise Exception(response)
-            return response["data"]["server"]
+            return response
 
-    async def get_account_details(self) -> GetAccountDetailsResponse:
+    async def get_account_id(self) -> GetAccountIdResponse:
         self.check_public_account()
-        params = {
-            "token": self.token,
-        }
-        async with self.session.get("/getAccountDetails", params=params) as resp:
+        async with self.session.get("/accounts/getid") as resp:
             response = await resp.json()
+            logger.debug(f'Account id is "{response["data"]["id"]}"')
+            return response
+
+    async def get_account_details(self, account_id: str) -> GetAccountDetailsResponse:
+        self.check_public_account()
+        async with self.session.get(f"/accounts/{account_id}") as resp:
+            response = await resp.json()
+            logger.debug(f'Account details for "{account_id}" are {response["data"]}')
             return response
 
     async def set_premium_status(self) -> None:
-        account = await self.get_account_details()
+        account = await self.get_account_details(self.account_id)
         self.is_premium = account["data"]["tier"] != "standard"
 
-    async def get_content(self, content_id: str) -> GetContentResponse:
+    async def get_content(self, content_id: str, cache: Optional[bool], password: Optional[str]) -> GetContentResponse:
+        # Requires Premium
         self.check_premium_status()
 
-        params = {
-            "token": self.token,
-            "contentId": content_id,
-        }
-        async with self.session.get("/getContent", params=params) as resp:
+        params = {}
+        if cache:
+            params["cache"] = cache
+        if password:
+            params["password"] = password
+
+        async with self.session.get(f"/contents/{content_id}", params=params) as resp:
             response = await resp.json()
             return response
 
-    async def create_folder(self, parent_folder_id: str, folder_name: str) -> CreateFolderData:
+    async def create_folder(self, parent_folder_id: str, folder_name: Optional[str]) -> CreateFolderData:
         self.check_public_account()
-        data = {"token": self.token, "parentFolderId": parent_folder_id, "folderName": folder_name}
-        logger.debug(f"Creating new folder {folder_name}")
-        async with self.session.put("/createFolder", data=data) as resp:
+        data = {"parentFolderId": parent_folder_id}
+        if folder_name:
+            data["folderName"] = folder_name
+
+        logger.debug(f"Creating new folder '{folder_name}' in parent folder id '{parent_folder_id}' ")
+        async with self.session.post("/contents/createfolder", data=data) as resp:
             response = await resp.json()
             if "status" not in response or response["status"] != "ok":
                 raise Exception(response)
+            logger.debug(
+                f'Folder "{response["data"]["name"]}" ({response["data"]["folderId"]}) created in {response["data"]["parentFolder"]}'
+            )
             self.created_folders[folder_name] = response["data"]
             return response["data"]
 
-    async def set_option(self, content_id: str, option: SetOptionOption, value: SetOptionValue) -> CreateFolderData:
-        data = {"contentId": content_id, "token": self.token, "option": option, "value": value}
-        async with self.session.put("/setOption", data=data) as resp:
+    async def update_content(
+        self, content_id: str, option: UpdateContentOption, value: UpdateContentOptionValue
+    ) -> CreateFolderData:
+        data = {"attribute": option, "attributeValue": value}
+        async with self.session.put(f"/contents/{content_id}/update", data=data) as resp:
             response = await resp.json()
             if "status" not in response or response["status"] != "ok":
                 raise Exception(response)
@@ -239,10 +169,14 @@ class GofileIOAPI:
             retries = 0
             while retries < 3:
                 try:
-                    server = await self.get_server()
+                    servers = await self.get_servers(zone=self.zone)
+
+                    server = next(iter(servers["data"]["servers"]))["name"]
                     if server not in self.server_sessions:
                         logger.info(f"Using new server connection to {server}")
-                        self.server_sessions[server] = aiohttp.ClientSession(f"https://{server}.gofile.io")
+                        self.server_sessions[server] = aiohttp.ClientSession(
+                            f"https://{server}.gofile.io", headers=self.session_headers
+                        )
 
                     session = self.server_sessions[server]
 
@@ -252,12 +186,14 @@ class GofileIOAPI:
                         with ProgressFileReader(filename=file_path, read_callback=t.update_to) as upload_file:
                             data = aiohttp.FormData()
                             data.add_field("file", upload_file, filename=file_path.name)
-                            if self.token:
-                                data.add_field("token", self.token)
-                                if folder_id:
-                                    data.add_field("folderId", folder_id)
+                            logger.debug(f'File "{file_path.name}" was selected for upload')
+                            if folder_id:
+                                logger.debug(f'File {file_path.name} will be uploaded to folder id "{folder_id}"')
+                                data.add_field("folderId", folder_id)
+                            else:
+                                logger.debug(f'File {file_path.name} will be uploaded to a new randomly created folder id')
 
-                            async with session.post("/uploadFile", data=data) as resp:
+                            async with session.post("/contents/uploadfile", data=data) as resp:
                                 response = await resp.json()
                                 if "status" not in response or response["status"] != "ok":
                                     raise Exception(
@@ -283,8 +219,14 @@ class GofileIOAPI:
 
 
 class GofileIOUploader:
-    def __init__(self, token: Union[str, None] = None, max_connections: int = 4, make_public: bool = False):
-        self.api = GofileIOAPI(token, max_connections)
+    def __init__(
+        self,
+        token: Optional[str] = None,
+        max_connections: int = 4,
+        make_public: bool = False,
+        zone: Optional[Literal["eu", "na"]] = None,
+    ):
+        self.api = GofileIOAPI(token, max_connections=max_connections, zone=zone)
         self.make_public = make_public
 
     async def init(self) -> None:
@@ -310,7 +252,7 @@ class GofileIOUploader:
                     # Create the folder
                     # TODO: With premium it would be nice to query folder to see if it already exists on gofile
                     new_folder = await self.api.create_folder(self.api.root_folder_id, folder)
-                    folder_id = new_folder["id"]
+                    folder_id = new_folder["folderId"]
             else:
                 # Set account root folder by default
                 folder_id = self.api.root_folder_id
@@ -326,12 +268,11 @@ class GofileIOUploader:
             paths = [x for x in contents.iterdir()]
             if folder is None:
                 folder = contents.name
-
         folder_id = await self.get_folder_id(folder)
 
         if self.make_public and folder_id != self.api.root_folder_id:
             logger.info(f"Making folder {folder_id} public")
-            await self.api.set_option(folder_id, "public", "true")
+            await self.api.update_content(folder_id, "public", "true")
 
         responses = await self.api.upload_files(paths, folder_id)
         if save:
@@ -352,7 +293,15 @@ async def main() -> None:
         "-t",
         "--token",
         type=str,
-        help="API token for your account so that you can upload to a specific account/folder. You can also set the GOFILE_TOKEN environment variable for this",
+        help="""API token for your account so that you can upload to a specific account/folder.
+        You can also set the GOFILE_TOKEN environment variable for this""",
+    )
+    parser.add_argument(
+        "-z",
+        "--zone",
+        type=str,
+        choices=["na", "eu"],
+        help="Server zone to prefer uploading to",
     )
     parser.add_argument(
         "-f", "--folder", type=str, help="Folder to upload files to overriding the directory name if used"
@@ -374,7 +323,7 @@ async def main() -> None:
 
     token = args.token or os.getenv("GOFILE_TOKEN")
 
-    client = GofileIOUploader(token, args.connections, args.public)
+    client = GofileIOUploader(token, max_connections=args.connections, make_public=args.public, zone=args.zone)
     try:
         await client.init()
         await client.upload_files(args.file, args.folder, args.save)

@@ -161,3 +161,4 @@ cython_debug/
 directory
 *.json
 dummy.py
+gofile.env
