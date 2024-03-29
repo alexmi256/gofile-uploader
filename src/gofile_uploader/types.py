@@ -1,4 +1,4 @@
-from typing import Literal, TypedDict, Union
+from typing import Literal, TypedDict, Union, Optional
 
 
 class ServerResponse(TypedDict):
@@ -133,8 +133,8 @@ class UploadFileResponse(ServerResponse):
 
 class GofileCLIArgs(TypedDict):
     file: str
-    token: Union[str, None]
-    folder: Union[str, None]
+    token: Optional[str]
+    folder: Optional[str]
     connections: int
     public: bool
     no_save: bool

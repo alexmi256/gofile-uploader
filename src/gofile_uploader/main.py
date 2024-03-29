@@ -28,7 +28,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 class ProgressFileReader(BufferedReader):
-    def __init__(self, filename: Path, read_callback: Union[Callable[[int, int, Union[int, None]], None], None] = None):
+    def __init__(self, filename: Path, read_callback: Optional[Callable[[int, int, Optional[int]], None]] = None):
         # Don't use with because we need the file to be open for future progress
         # No idea if this causes memory issues
         f = open(filename, "rb")
@@ -36,7 +36,7 @@ class ProgressFileReader(BufferedReader):
         super().__init__(raw=f)
         self.length = Path(filename).stat().st_size
 
-    def read(self, size: Union[int, None] = None):
+    def read(self, size: Optional[int] = None):
         calc_sz = size
         if not calc_sz:
             calc_sz = self.length - self.tell()
@@ -64,7 +64,7 @@ class TqdmUpTo(tqdm):
 
 class GofileIOAPI:
     def __init__(
-        self, token: Union[str, None] = None, max_connections: int = 4, zone: Optional[Literal["eu", "na"]] = None
+        self, token: Optional[str] = None, max_connections: int = 4, zone: Optional[Literal["eu", "na"]] = None
     ):
         self.token = token
         self.session_headers = {"Authorization": f"Bearer {self.token}"} if self.token else None
@@ -164,7 +164,7 @@ class GofileIOAPI:
                 raise Exception(response)
             return response["data"]
 
-    async def upload_file(self, file_path: Path, folder_id: Union[str, None] = None, tqdm_index=1) -> str:
+    async def upload_file(self, file_path: Path, folder_id: Optional[str] = None, tqdm_index=1) -> str:
         async with self.sem:
             retries = 0
             while retries < 3:
@@ -205,7 +205,7 @@ class GofileIOAPI:
                     retries += 1
                     logger.error(f"Failed to upload {file_path} due to:\n", exc_info=e)
 
-    async def upload_files(self, paths: list[Path], folder_id: Union[str, None] = None) -> list[dict]:
+    async def upload_files(self, paths: list[Path], folder_id: Optional[str] = None) -> list[dict]:
         try:
             tasks = [self.upload_file(test_file, folder_id, i + 1) for i, test_file in enumerate(paths)]
             responses = await tqdm_asyncio.gather(*tasks, desc="Files uploaded")
@@ -238,7 +238,7 @@ class GofileIOUploader:
             logger.error(ex)
             await self.api.session.close()
 
-    async def get_folder_id(self, folder: Union[str, None]) -> Union[str, None]:
+    async def get_folder_id(self, folder: Optional[str]) -> Optional[str]:
         folder_id = None
 
         if folder is None:
@@ -259,7 +259,7 @@ class GofileIOUploader:
 
         return folder_id
 
-    async def upload_files(self, path: str, folder: Union[str, None] = None, save: bool = True):
+    async def upload_files(self, path: str, folder: Optional[str] = None, save: bool = True):
         contents = Path(path)
 
         if contents.is_file():
