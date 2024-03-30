@@ -13,7 +13,7 @@ import aiohttp
 from tqdm import tqdm
 from tqdm.asyncio import tqdm_asyncio
 
-from src.gofile_uploader.types import (
+from .types import (
     CreateFolderData,
     GetAccountDetailsResponse,
     GetAccountIdResponse,
@@ -24,7 +24,7 @@ from src.gofile_uploader.types import (
 )
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.WARNING)
 
 
 class ProgressFileReader(BufferedReader):
@@ -167,7 +167,7 @@ class GofileIOAPI:
     async def upload_file(self, file_path: Path, folder_id: Optional[str] = None, tqdm_index=1) -> list[str]:
         async with self.sem:
             retries = 0
-            while retries < 3:
+            while retries < 1:
                 try:
                     # TODO: Rate limit to one request every 10 seconds
                     servers = await self.get_servers(zone=self.zone)
@@ -288,17 +288,18 @@ class GofileIOUploader:
             pprint(responses)
 
 
-async def main() -> None:
+def cli():
     parser = argparse.ArgumentParser(
-        prog="GofileIOUploader", description="Gofile.io Uploader supporting parallel uploads"
+        prog="gofile-upload", description="Gofile.io Uploader supporting parallel uploads"
     )
     parser.add_argument("file", type=str, help="File or directory to look for files in to upload")
     parser.add_argument(
         "-t",
         "--token",
         type=str,
+        default=os.getenv("GOFILE_TOKEN"),
         help="""API token for your account so that you can upload to a specific account/folder.
-        You can also set the GOFILE_TOKEN environment variable for this""",
+                You can also set the GOFILE_TOKEN environment variable for this""",
     )
     parser.add_argument(
         "-z",
@@ -321,19 +322,27 @@ async def main() -> None:
         "--save",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help='Don\'t save uploaded file urls to a "gofile_upload_<unixtime>.json" file',
+        help='Don\'t save uploaded file urls to a "gofile_upload_<unixtime>.csv" file',
     )
     args = parser.parse_args()
 
-    token = args.token or os.getenv("GOFILE_TOKEN")
+    return args
 
-    client = GofileIOUploader(token, max_connections=args.connections, make_public=args.public, zone=args.zone)
+
+async def async_main() -> None:
+    args = cli()
+    logger.debug(args)
+    gofile_client = GofileIOUploader(
+        args.token, max_connections=args.connections, make_public=args.public, zone=args.zone
+    )
+
     try:
-        await client.init()
-        await client.upload_files(args.file, args.folder, args.save)
+        await gofile_client.init()
+        await gofile_client.upload_files(args.file, args.folder, args.save)
     finally:
-        if not client.api.session.closed:
-            await client.api.session.close()
+        if not gofile_client.api.session.closed:
+            await gofile_client.api.session.close()
 
 
-asyncio.run(main())
+def main():
+    asyncio.run(async_main())

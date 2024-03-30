@@ -3,3 +3,5 @@ tqdm
 black
 isort
 pre-commit
+twine
+build
