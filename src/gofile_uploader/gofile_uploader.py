@@ -64,7 +64,11 @@ class TqdmUpTo(tqdm):
 
 class GofileIOAPI:
     def __init__(
-        self, token: Optional[str] = None, max_connections: int = 4, zone: Optional[Literal["eu", "na"]] = None
+        self,
+        token: Optional[str] = None,
+        max_connections: int = 4,
+        zone: Optional[Literal["eu", "na"]] = None,
+        retries: int = 1,
     ):
         self.token = token
         self.session_headers = {"Authorization": f"Bearer {self.token}"} if self.token else None
@@ -77,6 +81,7 @@ class GofileIOAPI:
         self.server_sessions = {}
         self.created_folders = {}
         self.sem = asyncio.Semaphore(max_connections)
+        self.retries = retries
 
     async def init(self):
         account_id = await self.get_account_id()
@@ -167,7 +172,7 @@ class GofileIOAPI:
     async def upload_file(self, file_path: Path, folder_id: Optional[str] = None, tqdm_index=1) -> list[str]:
         async with self.sem:
             retries = 0
-            while retries < 1:
+            while retries < self.retries:
                 try:
                     # TODO: Rate limit to one request every 10 seconds
                     servers = await self.get_servers(zone=self.zone)
@@ -228,8 +233,9 @@ class GofileIOUploader:
         max_connections: int = 4,
         make_public: bool = False,
         zone: Optional[Literal["eu", "na"]] = None,
+        retries: int = 1,
     ):
-        self.api = GofileIOAPI(token, max_connections=max_connections, zone=zone)
+        self.api = GofileIOAPI(token, max_connections=max_connections, zone=zone, retries=retries)
         self.make_public = make_public
 
     async def init(self) -> None:
@@ -278,20 +284,18 @@ class GofileIOUploader:
             await self.api.update_content(folder_id, "public", "true")
 
         responses = await self.api.upload_files(paths, folder_id)
-        if save:
+        if save and responses:
             file_name = f"gofile_upload_{int(time.time())}.csv"
             with open(file_name, "w", newline="") as csvfile:
                 logger.info(f"Saving uploaded files to {file_name}")
                 csv_writer = csv.writer(csvfile, dialect="excel")
-                csv_writer.writerows(responses)
+                csv_writer.writerows([x for x in responses if x])
         else:
             pprint(responses)
 
 
 def cli():
-    parser = argparse.ArgumentParser(
-        prog="gofile-upload", description="Gofile.io Uploader supporting parallel uploads"
-    )
+    parser = argparse.ArgumentParser(prog="gofile-upload", description="Gofile.io Uploader supporting parallel uploads")
     parser.add_argument("file", type=str, help="File or directory to look for files in to upload")
     parser.add_argument(
         "-t",
@@ -324,6 +328,13 @@ def cli():
         default=True,
         help='Don\'t save uploaded file urls to a "gofile_upload_<unixtime>.csv" file',
     )
+    parser.add_argument(
+        "-r",
+        "--retries",
+        default=3,
+        type=int,
+        help="How many times to retry a failed upload",
+    )
     args = parser.parse_args()
 
     return args
@@ -333,7 +344,7 @@ async def async_main() -> None:
     args = cli()
     logger.debug(args)
     gofile_client = GofileIOUploader(
-        args.token, max_connections=args.connections, make_public=args.public, zone=args.zone
+        args.token, max_connections=args.connections, make_public=args.public, zone=args.zone, retries=args.retries
     )
 
     try:
