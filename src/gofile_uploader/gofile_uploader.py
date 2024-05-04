@@ -3,11 +3,14 @@ import asyncio
 import csv
 import logging
 import os
+import hashlib
+import re
 import time
+import json
 from io import BufferedReader
 from pathlib import Path
 from pprint import pformat, pprint
-from typing import Callable, Literal, Optional
+from typing import Callable, Literal, Optional, Any
 
 import aiohttp
 from tqdm import tqdm
@@ -69,9 +72,14 @@ class GofileIOAPI:
         max_connections: int = 4,
         zone: Optional[Literal["eu", "na"]] = None,
         retries: int = 1,
+        options: Optional[dict[str, Any]] = None,
     ):
+        if options is None:
+            options = {}
+        self.options = options
         self.token = token
         self.session_headers = {"Authorization": f"Bearer {self.token}"} if self.token else None
+        self.wt = None
         self.session = aiohttp.ClientSession("https://api.gofile.io", headers=self.session_headers)
         self.zone = zone
         self.root_folder_id = None
@@ -87,6 +95,9 @@ class GofileIOAPI:
         account_id = await self.get_account_id()
         self.account_id = account_id["data"]["id"]
 
+        if self.wt is None:
+            self.wt = await self.get_wt()
+
         if self.token is not None:
             account = await self.get_account_details(self.account_id)
             self.root_folder_id = account["data"]["rootFolder"]
@@ -100,6 +111,29 @@ class GofileIOAPI:
         self.check_public_account()
         if self.is_premium is False:
             raise Exception(f"Account tier is standard but needs to be premium")
+
+    async def get_wt(self) -> Optional[str]:
+        # Maybe one day I'll figure out what this stands for
+        wt = None
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://gofile.io/dist/js/alljs.js") as resp:
+                response = await resp.text()
+                if self.options.get('debug_save_js_locally'):
+                    response_hash = hashlib.md5(response.encode("utf-8")).hexdigest()
+                    file_name = Path(f"gofile-alljs-{response_hash}.js")
+                    if file_name.exists():
+                        logger.debug(f"Gofile script {file_name} was retrieved but already existed locally")
+                    else:
+                        with open(file_name, "w") as file:
+                            file.write(response)
+                            logger.debug(f"Gofile script {file_name} was retrieved and saved locally")
+                wt_search = re.search(r"wt:\s*\"(\w{12})\"", response)
+                if wt_search:
+                    wt = wt_search.groups()[0]
+                    logger.debug(f"Gofile wt was successfully extracted as {wt}")
+                else:
+                    logger.error(f"Failed to fetch gofile wt")
+        return wt
 
     async def get_servers(self, zone: Optional[Literal["eu", "na"]]) -> GetServersResponse:
         params = {"zone": zone} if zone else None
@@ -234,18 +268,72 @@ class GofileIOUploader:
         make_public: bool = False,
         zone: Optional[Literal["eu", "na"]] = None,
         retries: int = 1,
+        options: Optional[dict[str, Any]] = None,
     ):
-        self.api = GofileIOAPI(token, max_connections=max_connections, zone=zone, retries=retries)
+        # I hate having these in both Uploader and Client but client is supposed to be dumb and have less logic
+        # which leads to annoying complexity
+        if options is None:
+            options = {}
+        self.options = options
+
+        self.api = GofileIOAPI(
+            token, max_connections=max_connections, zone=zone, retries=retries, options=options
+        )
         self.make_public = make_public
+
+        # Let's create and/or load a config if one was used
+        home_path = Path.home()
+
+        self.config_directory = home_path.joinpath(".config", "gofile-upload")
+        self.config_file_path = self.config_directory.joinpath('config.json')
+        # Only use a config if the user has authorized (which is set to true by default)
+        self.load_config_file()
 
     async def init(self) -> None:
         try:
             if self.api.token is not None:
                 await self.api.init()
+            # We should get the wt even if we don't have an account
+            if self.api.wt is None:
+                self.api.wt = await self.api.get_wt()
 
         except Exception as ex:
             logger.error(ex)
             await self.api.session.close()
+
+    def save_config_file(self):
+        """
+        Creates the config directory and file with the current config options if using config is enabled
+        """
+        if self.options.get("use_config"):
+            if not self.config_directory.exists():
+                logger.info(f'Creating config directory at {self.config_directory}')
+                self.config_directory.mkdir(parents=True, exist_ok=True)
+
+            with open(self.config_file_path, 'w') as config_file:
+                logger.debug(f'Saving config to {self.config_file_path}')
+                json.dump(self.options['config'], config_file,  indent=2)
+        else:
+            logger.error(f'Config file is not in use')
+
+    def load_config_file(self):
+        """
+        Loads the config file to config options if using config is enabled
+        """
+        if self.options.get("use_config"):
+            if self.config_file_path.exists():
+                with open(self.config_file_path, 'r') as config_file:
+                    logger.debug(f'Loading config from {self.config_file_path}')
+                    try:
+                        self.options['config'] = json.load(config_file)
+                    except Exception:
+                        logger.exception(f'Failed to load config file {self.config_file_path} as a JSON config')
+            else:
+                logger.error(f'Could not load config file {self.config_file_path} because it did not exist')
+                self.options['config'] = {}
+                self.save_config_file()
+        else:
+            logger.error(f'Config file is not in use')
 
     async def get_folder_id(self, folder: Optional[str]) -> Optional[str]:
         folder_id = None
@@ -315,6 +403,18 @@ def cli():
     parser.add_argument(
         "-f", "--folder", type=str, help="Folder to upload files to overriding the directory name if used"
     )
+    parser.add_argument(
+        "-d",
+        "--dry-run",
+        action="store_true",
+        help="Don't create folders or upload files",
+    )
+    parser.add_argument(
+        "--debug-save-js-locally",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Debug option to save the retrieved js file locally",
+    )
     parser.add_argument("-c", "--connections", type=int, default=6, help="Maximum parallel uploads to do at once")
     parser.add_argument(
         "--public",
@@ -327,6 +427,12 @@ def cli():
         action=argparse.BooleanOptionalAction,
         default=True,
         help='Don\'t save uploaded file urls to a "gofile_upload_<unixtime>.csv" file',
+    )
+    parser.add_argument(
+        "--use-config",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Whether to create and use a config file in $HOME/.config/gofile_upload/config.json",
     )
     parser.add_argument(
         "-r",
@@ -343,13 +449,28 @@ def cli():
 async def async_main() -> None:
     args = cli()
     logger.debug(args)
+
+    options = {}
+    if args.debug_save_js_locally:
+        options["debug_save_js_locally"] = args.debug_save_js_locally
+    if args.use_config:
+        options["use_config"] = args.use_config
+
     gofile_client = GofileIOUploader(
-        args.token, max_connections=args.connections, make_public=args.public, zone=args.zone, retries=args.retries
+        args.token,
+        max_connections=args.connections,
+        make_public=args.public,
+        zone=args.zone,
+        retries=args.retries,
+        options=options,
     )
 
     try:
         await gofile_client.init()
-        await gofile_client.upload_files(args.file, args.folder, args.save)
+        if args.dry_run:
+            print("Dry run only, uploading skipped")
+        else:
+            await gofile_client.upload_files(args.file, args.folder, args.save)
     finally:
         if not gofile_client.api.session.closed:
             await gofile_client.api.session.close()

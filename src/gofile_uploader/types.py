@@ -138,3 +138,8 @@ class GofileCLIArgs(TypedDict):
     connections: int
     public: bool
     no_save: bool
+
+
+class GofileCLIDebugOptions(TypedDict):
+    save_js_locally: Optional[bool]
+    create_config: Optional[bool]

@@ -163,3 +163,4 @@ directory
 dummy.py
 gofile.env
 *.csv
+gofile-alljs-*

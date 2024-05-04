@@ -64,11 +64,18 @@ directory/
 
 `gofile-upload --token 123 --folder foo directory`
 
-## Improvements Wishlist
-- [ ] Paid accounts support
+# Packaging
+
+# Improvements Wishlist
+- [ ] Paid accounts support, I don't have a paid account so I can't test
+- [ ] Add directory sync support to reupload deleted files
+- [ ] Cache
+- [ ] Add tests
+- [ ] Add github runners for tests
 
 # Thanks
 - https://stackoverflow.com/questions/68690141/how-to-show-progress-on-aiohttp-post-with-both-form-data-and-file
 - https://github.com/londarks/Unofficial-gofile.io-API-Documentation
 - https://github.com/Samridh212/File_Uploader_goFile
 - https://gofile.io/api
+- https://github.com/rkwyu/gofile-dl
