@@ -118,7 +118,7 @@ class GofileIOAPI:
         async with aiohttp.ClientSession() as session:
             async with session.get("https://gofile.io/dist/js/alljs.js") as resp:
                 response = await resp.text()
-                if self.options.get('debug_save_js_locally'):
+                if self.options.get("debug_save_js_locally"):
                     response_hash = hashlib.md5(response.encode("utf-8")).hexdigest()
                     file_name = Path(f"gofile-alljs-{response_hash}.js")
                     if file_name.exists():
@@ -276,16 +276,14 @@ class GofileIOUploader:
             options = {}
         self.options = options
 
-        self.api = GofileIOAPI(
-            token, max_connections=max_connections, zone=zone, retries=retries, options=options
-        )
+        self.api = GofileIOAPI(token, max_connections=max_connections, zone=zone, retries=retries, options=options)
         self.make_public = make_public
 
         # Let's create and/or load a config if one was used
         home_path = Path.home()
 
         self.config_directory = home_path.joinpath(".config", "gofile-upload")
-        self.config_file_path = self.config_directory.joinpath('config.json')
+        self.config_file_path = self.config_directory.joinpath("config.json")
         # Only use a config if the user has authorized (which is set to true by default)
         self.load_config_file()
 
@@ -307,14 +305,14 @@ class GofileIOUploader:
         """
         if self.options.get("use_config"):
             if not self.config_directory.exists():
-                logger.info(f'Creating config directory at {self.config_directory}')
+                logger.info(f"Creating config directory at {self.config_directory}")
                 self.config_directory.mkdir(parents=True, exist_ok=True)
 
-            with open(self.config_file_path, 'w') as config_file:
-                logger.debug(f'Saving config to {self.config_file_path}')
-                json.dump(self.options['config'], config_file,  indent=2)
+            with open(self.config_file_path, "w") as config_file:
+                logger.debug(f"Saving config to {self.config_file_path}")
+                json.dump(self.options["config"], config_file, indent=2)
         else:
-            logger.error(f'Config file is not in use')
+            logger.error(f"Config file is not in use")
 
     def load_config_file(self):
         """
@@ -322,18 +320,18 @@ class GofileIOUploader:
         """
         if self.options.get("use_config"):
             if self.config_file_path.exists():
-                with open(self.config_file_path, 'r') as config_file:
-                    logger.debug(f'Loading config from {self.config_file_path}')
+                with open(self.config_file_path, "r") as config_file:
+                    logger.debug(f"Loading config from {self.config_file_path}")
                     try:
-                        self.options['config'] = json.load(config_file)
+                        self.options["config"] = json.load(config_file)
                     except Exception:
-                        logger.exception(f'Failed to load config file {self.config_file_path} as a JSON config')
+                        logger.exception(f"Failed to load config file {self.config_file_path} as a JSON config")
             else:
-                logger.error(f'Could not load config file {self.config_file_path} because it did not exist')
-                self.options['config'] = {}
+                logger.error(f"Could not load config file {self.config_file_path} because it did not exist")
+                self.options["config"] = {}
                 self.save_config_file()
         else:
-            logger.error(f'Config file is not in use')
+            logger.error(f"Config file is not in use")
 
     async def get_folder_id(self, folder: Optional[str]) -> Optional[str]:
         folder_id = None
