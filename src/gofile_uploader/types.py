@@ -101,7 +101,7 @@ class GetContentData(TypedDict):
     totalDownloadCount: int
     totalSize: int
     childrenIds: list[str]
-    children: dict[str, GetContentChildFile | GetContentChildFolder]
+    children: dict[str, Union[GetContentChildFile, GetContentChildFolder]]
 
 
 class GetContentResponse(ServerResponse):
