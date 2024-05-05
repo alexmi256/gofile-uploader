@@ -95,6 +95,15 @@ directory/
 `gofile-upload --token 123 --folder foo directory`
 
 # Development
+## Optional Prerequesites
+- tk `sudo pacman -S base-devel tk`
+- [pyenv](https://github.com/pyenv/pyenv?tab=readme-ov-file#set-up-your-shell-environment-for-pyenv)
+- [pyenv-virtualenv](https://github.com/pyenv/pyenv-virtualenv?tab=readme-ov-file#installing-as-a-pyenv-plugin)
+
+```bash
+pyenv install 3.9
+```
+
 ## Setup
 ```bash
 pip install -r requirements-dev.txt

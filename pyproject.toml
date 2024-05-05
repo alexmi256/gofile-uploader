@@ -1,6 +1,6 @@
 [tool.black]
 line-length = 120
-target-version = ['py310']
+target-version = ['py39']
 include = '\.pyi?$'
 # 'extend-exclude' excludes files or directories in addition to the defaults
 extend-exclude = '''
@@ -24,7 +24,7 @@ name = "GofileIOUploader"
 version = "0.10.0"
 description = "Gofile.io uploader supporting parallel uploads"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = {text = "MIT License"}
 keywords = ["gofile", "upload", "storage", "parallel"]
 authors = [

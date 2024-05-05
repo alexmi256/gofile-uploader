@@ -406,11 +406,11 @@ class GofileIOUploader:
             )
             if folder_with_same_name:
                 logger.info(
-                    f'Found folder "{folder_with_same_name['name']}" ({folder_with_same_name['id']}) inside root folder ({self.api.root_folder_id}), will reuse'
+                    f"Found folder \"{folder_with_same_name['name']}\" ({folder_with_same_name['id']}) inside root folder ({self.api.root_folder_id}), will reuse"
                 )
                 return folder_with_same_name["id"]
             else:
-                # We could't find a previosuly created folder with the same name so we should create a new one
+                # We couldn't find a previosuly created folder with the same name so we should create a new one
                 logger.info(
                     f'Could not find a folder inside the root folder with the name "{folder}" so we will create one'
                 )
