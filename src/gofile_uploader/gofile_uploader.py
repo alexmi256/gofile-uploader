@@ -351,6 +351,8 @@ class GofileIOUploader:
 
     def create_config_defaults(self):
         if self.options["use_config"]:
+            if "config" not in self.options:
+                self.options["config"] = {}
             if "history" not in self.options["config"]:
                 self.options["config"]["history"] = {}
             if "uploads" not in self.options["config"]["history"]:
