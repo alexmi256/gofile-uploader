@@ -64,39 +64,44 @@ class GetAccountIdResponse(ServerResponse):
     data: GetAccountIdData
 
 
-class GetContentIndividualContent(TypedDict):
+class GetContentChildFile(TypedDict):
     id: str
     type: str
     name: str
-    code: str
-    # parentFolder: str
     createTime: int
-    public: bool
-    childrenIds: list[str]
     size: int
     downloadCount: int
     md5: str
     mimetype: str
     serverSelected: str
-    # directLink: str
     link: str
     thumbnail: str
 
 
+class GetContentChildFolder(TypedDict):
+    id: str
+    type: str
+    name: str
+    code: str
+    createTime: int
+    public: bool
+    childrenIds: list[str]
+
+
 class GetContentData(TypedDict):
-    # isOwner: bool
+    isOwner: bool
     id: str
     type: str
     name: str
     parentFolder: str
     code: str
     createTime: int
+    isRoot: bool
     public: bool
-    childs: list[str]
     totalDownloadCount: int
     totalSize: int
     childrenIds: list[str]
-    children: dict[str, GetContentIndividualContent]
+    children: dict[str, GetContentChildFile | GetContentChildFolder]
 
 
 class GetContentResponse(ServerResponse):
@@ -129,6 +134,13 @@ class UploadFileData(TypedDict):
 
 class UploadFileResponse(ServerResponse):
     data: UploadFileData
+
+
+class CompletedFileUploadResult(UploadFileData):
+    filePath: str
+    filePathMD5: str
+    fileNameMD5: str
+    uploadSuccess: Optional[str]
 
 
 class GofileCLIArgs(TypedDict):

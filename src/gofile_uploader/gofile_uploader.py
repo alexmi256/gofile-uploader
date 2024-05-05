@@ -24,10 +24,11 @@ from .types import (
     GetServersResponse,
     UpdateContentOption,
     UpdateContentOptionValue,
+    CompletedFileUploadResult,
 )
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.DEBUG)
 
 
 class ProgressFileReader(BufferedReader):
@@ -164,11 +165,14 @@ class GofileIOAPI:
 
     async def get_content(self, content_id: str, cache: Optional[bool], password: Optional[str]) -> GetContentResponse:
         # Requires Premium
-        self.check_premium_status()
+        if not self.wt:
+            self.check_premium_status()
 
         params = {}
         if cache:
-            params["cache"] = cache
+            params["cache"] = "true"
+        if self.wt:
+            params["wt"] = self.wt
         if password:
             params["password"] = password
 
@@ -203,7 +207,13 @@ class GofileIOAPI:
                 raise Exception(response)
             return response["data"]
 
-    async def upload_file(self, file_path: Path, folder_id: Optional[str] = None, tqdm_index=1) -> list[str]:
+    async def upload_file(self, file_path: Path, folder_id: Optional[str] = None) -> CompletedFileUploadResult:
+        file_metadata = {
+            "filePath": str(file_path),
+            "filePathMD5": hashlib.md5(str(file_path).encode("utf-8")).hexdigest(),
+            "fileNameMD5": hashlib.md5(str(file_path.name).encode("utf-8")).hexdigest(),
+            "uploadSuccess": None,
+        }
         async with self.sem:
             retries = 0
             while retries < self.retries:
@@ -241,17 +251,22 @@ class GofileIOAPI:
                                     raise Exception(
                                         f'File {file_path.name} failed upload load due to missing or not "ok" status in response:\n{pformat(response)}'
                                     )
-                                return [response["data"]["fileName"], response["data"]["downloadPage"]]
+                                file_metadata.update(response["data"])
+                                file_metadata["uploadSuccess"] = response.get("status")
+                                if file_metadata["uploadSuccess"] == 'ok':
+                                    self.options['config']['history']['uploads'].append(file_metadata)
+                                return file_metadata
 
                 except Exception as e:
                     retries += 1
                     logger.error(f"Failed to upload {file_path} due to:\n", exc_info=e)
 
-    async def upload_files(self, paths: list[Path], folder_id: Optional[str] = None) -> list[list[str]]:
+                return file_metadata
+
+    async def upload_files(self, paths: list[Path], folder_id: Optional[str] = None) -> list[CompletedFileUploadResult]:
         try:
-            tasks = [self.upload_file(test_file, folder_id, i + 1) for i, test_file in enumerate(paths)]
+            tasks = [self.upload_file(test_file, folder_id) for i, test_file in enumerate(paths)]
             responses = await tqdm_asyncio.gather(*tasks, desc="Files uploaded")
-            # FIXME: Need to fix responses
             return responses
         finally:
             # This should happen in the API client itself
@@ -328,33 +343,119 @@ class GofileIOUploader:
                         logger.exception(f"Failed to load config file {self.config_file_path} as a JSON config")
             else:
                 logger.error(f"Could not load config file {self.config_file_path} because it did not exist")
-                self.options["config"] = {}
+                self.create_config_defaults()
                 self.save_config_file()
+        else:
+            logger.error(f"Config file is not in use, creating them in memory only")
+            self.create_config_defaults()
+
+    def create_config_defaults(self):
+        if self.options['use_config']:
+            if 'history' not in self.options['config']:
+                self.options['config']['history'] = {}
+            if 'uploads' not in self.options['config']['history']:
+                self.options['config']['history']['uploads'] = []
+            if 'md5_sums' not in self.options['config']['history']:
+                self.options['config']['history']['md5_sums'] = {}
         else:
             logger.error(f"Config file is not in use")
 
     async def get_folder_id(self, folder: Optional[str]) -> Optional[str]:
-        folder_id = None
+        """
+        Get the id of a folder's name
+        A folder should be the name of the folder you want to retrieve the id of but can also be the root id
+        """
 
+        # No folder provided, try to use root folder
         if folder is None:
-            return None
-        elif self.api.token:
-            if folder:
-                # Check if the folder is already the root folder id for the account
-                if folder == self.api.root_folder_id:
-                    folder_id = folder
-                else:
-                    # Create the folder
-                    # TODO: With premium it would be nice to query folder to see if it already exists on gofile
-                    new_folder = await self.api.create_folder(self.api.root_folder_id, folder)
-                    folder_id = new_folder["folderId"]
+            logger.warning("No folder was specified")
+            if self.api.token:
+                # When no folder is specified and the user has an account, upload to the root folder
+                logger.debug('Using root folder id since we have an API token')
+                return self.api.root_folder_id
             else:
-                # Set account root folder by default
-                folder_id = self.api.root_folder_id
+                logger.warning("Poorly supported: No API token exists, need to create an temporary account")
+                # TODO If the user has not specified a token for an account we should create an account on the fly so they
+                #  can keep all uploads in that folder
+                return None
+        # Folder is UUIDv4, assume user is referencing to something already created
+        elif re.match(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", folder):
+            logger.warning(
+                "For some reason the given folder name to create was a UUID so we will assume it already exists"
+            )
+            return folder
+        # Folder needs to be created or already exists
+        elif self.api.token:
+            root_folder_contents = await self.api.get_content(self.api.root_folder_id, cache=True, password=None)
 
-        return folder_id
+            # Another case that tbh don't name much sense but the user might specify "root" folder name which
+            # is usually the root folder name
+            if root_folder_contents["data"]["name"] == folder:
+                logger.info("The folder we wanted to create ended up being the account root folder")
+                return root_folder_contents["data"]["id"]
 
-    async def upload_files(self, path: str, folder: Optional[str] = None, save: bool = True):
+            # Check in the root folder if there is a directory with that name already
+            # We're only trying this one level deep otherwise we'd have to do recursive stuff I don't care to do atm
+            folder_with_same_name = next(
+                (
+                    x
+                    for x in root_folder_contents["data"].get("children", {}).values()
+                    if x.get("type") == "folder" and x.get("name") == folder
+                ),
+                None,
+            )
+            if folder_with_same_name:
+                logger.info(
+                    f'Found folder "{folder_with_same_name['name']}" ({folder_with_same_name['id']}) inside root folder ({self.api.root_folder_id}), will reuse'
+                )
+                return folder_with_same_name["id"]
+            else:
+                # We could't find a previosuly created folder with the same name so we should create a new one
+                logger.info(
+                    f'Could not find a folder inside the root folder with the name "{folder}" so we will create one'
+                )
+                new_folder = await self.api.create_folder(self.api.root_folder_id, folder)
+                return new_folder["folderId"]
+        else:
+            logger.warning("User did not provide an account or a folder name, should create temp account")
+            return None
+
+    def get_md5_sums_for_files(self, paths: list[Path]) -> dict[str, str]:
+        # Create the config paths for easier lookups just in case they didn't exist
+        self.create_config_defaults()
+
+        sums = {}
+
+        # TODO: Try to parallelize this
+        for path in paths:
+            if path.is_file():
+                if str(path) in self.options['config']['history']['md5_sums']:
+                    md5_sum_for_file = self.options['config']['history']['md5_sums'][str(path)]
+                    logger.debug(f'Found precomputed md5sum ({md5_sum_for_file}) for path "{path}" using md5_sums config history')
+                    sums[str(path)] = md5_sum_for_file
+                # TODO: Also check the previously uploaded file responses for MD5s of the same path
+                else:
+                    logger.debug(f'Computing new md5sum for file {path}')
+                    sums[str(path)] = GofileIOUploader.checksum(path)
+
+        # Save md5sums to local config cache so we don't have to recompute later
+        self.options['config']['history']['md5_sums'].update(sums)
+        self.save_config_file()
+
+        return sums
+
+    @staticmethod
+    def checksum(filename: Path, hash_factory=hashlib.md5, chunk_num_blocks: int = 128):
+        """
+        https://stackoverflow.com/questions/1131220/get-the-md5-hash-of-big-files-in-python
+        """
+        h = hash_factory()
+        with open(filename, "rb") as f:
+            while chunk := f.read(chunk_num_blocks * h.block_size):
+                h.update(chunk)
+        return h.hexdigest()
+
+    async def upload_files(self, path: str, folder: Optional[str] = None, save: bool = True) -> None:
         contents = Path(path)
 
         if contents.is_file():
@@ -365,19 +466,53 @@ class GofileIOUploader:
                 folder = contents.name
         folder_id = await self.get_folder_id(folder)
 
-        if self.make_public and folder_id != self.api.root_folder_id:
-            logger.info(f"Making folder {folder_id} public")
-            await self.api.update_content(folder_id, "public", "true")
+        if folder_id:
+            folder_id_contents = await self.api.get_content(folder_id, cache=True, password=None)
+            # TODO: Consider more lightweight name-only matching instead of md5sum
 
-        responses = await self.api.upload_files(paths, folder_id)
-        if save and responses:
-            file_name = f"gofile_upload_{int(time.time())}.csv"
-            with open(file_name, "w", newline="") as csvfile:
-                logger.info(f"Saving uploaded files to {file_name}")
-                csv_writer = csv.writer(csvfile, dialect="excel")
-                csv_writer.writerows([x for x in responses if x])
+            md5_sums_of_items_in_folder = [
+                x["md5"] for x in folder_id_contents["data"].get("children", {}).values() if x.get("type") == "file"
+            ]
+
+            paths_and_md5_sums = self.get_md5_sums_for_files(paths)
+            paths_to_skip = [k for k, v in paths_and_md5_sums.items() if v in md5_sums_of_items_in_folder]
+
+            if self.make_public and folder_id != self.api.root_folder_id and not folder_id_contents["data"]["public"]:
+                logger.info(f"Making folder {folder_id} public")
+                await self.api.update_content(folder_id, "public", "true")
+
+            logger.info(f"{len(paths_to_skip)}/{len(paths)} files will be skipped since they were already uploaded to the folder \"{folder}\"")
+            paths = [x for x in paths if str(x) not in paths_to_skip]
+
+        if paths:
+            responses = await self.api.upload_files(paths, folder_id)
+            if save and responses:
+                file_name = f"gofile_upload_{int(time.time())}.csv"
+                with open(file_name, "w", newline="") as csvfile:
+                    logger.info(f"Saving uploaded files to {file_name}")
+                    field_names = [
+                        "filePath",
+                        "filePathMD5",
+                        "fileNameMD5",
+                        "uploadSuccess",
+                        "code",
+                        "downloadPage",
+                        "fileId",
+                        "fileName",
+                        "guestToken",
+                        "md5",
+                        "parentFolder",
+                    ]
+                    csv_writer = csv.DictWriter(csvfile, dialect="excel", fieldnames=field_names)
+                    csv_writer.writeheader()
+                    for row in responses:
+                        csv_writer.writerow(row)
+
+
+            else:
+                pprint(responses)
         else:
-            pprint(responses)
+            print('No file paths left to upload')
 
 
 def cli():
@@ -472,6 +607,7 @@ async def async_main() -> None:
     finally:
         if not gofile_client.api.session.closed:
             await gofile_client.api.session.close()
+        gofile_client.save_config_file()
 
 
 def main():
