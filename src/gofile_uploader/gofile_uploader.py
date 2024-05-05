@@ -1,22 +1,23 @@
 import argparse
 import asyncio
 import csv
+import hashlib
+import json
 import logging
 import os
-import hashlib
 import re
 import time
-import json
 from io import BufferedReader
 from pathlib import Path
 from pprint import pformat, pprint
-from typing import Callable, Literal, Optional, Any
+from typing import Any, Callable, Literal, Optional
 
 import aiohttp
 from tqdm import tqdm
 from tqdm.asyncio import tqdm_asyncio
 
 from .types import (
+    CompletedFileUploadResult,
     CreateFolderData,
     GetAccountDetailsResponse,
     GetAccountIdResponse,
@@ -24,7 +25,6 @@ from .types import (
     GetServersResponse,
     UpdateContentOption,
     UpdateContentOptionValue,
-    CompletedFileUploadResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -253,8 +253,8 @@ class GofileIOAPI:
                                     )
                                 file_metadata.update(response["data"])
                                 file_metadata["uploadSuccess"] = response.get("status")
-                                if file_metadata["uploadSuccess"] == 'ok':
-                                    self.options['config']['history']['uploads'].append(file_metadata)
+                                if file_metadata["uploadSuccess"] == "ok":
+                                    self.options["config"]["history"]["uploads"].append(file_metadata)
                                 return file_metadata
 
                 except Exception as e:
@@ -350,13 +350,13 @@ class GofileIOUploader:
             self.create_config_defaults()
 
     def create_config_defaults(self):
-        if self.options['use_config']:
-            if 'history' not in self.options['config']:
-                self.options['config']['history'] = {}
-            if 'uploads' not in self.options['config']['history']:
-                self.options['config']['history']['uploads'] = []
-            if 'md5_sums' not in self.options['config']['history']:
-                self.options['config']['history']['md5_sums'] = {}
+        if self.options["use_config"]:
+            if "history" not in self.options["config"]:
+                self.options["config"]["history"] = {}
+            if "uploads" not in self.options["config"]["history"]:
+                self.options["config"]["history"]["uploads"] = []
+            if "md5_sums" not in self.options["config"]["history"]:
+                self.options["config"]["history"]["md5_sums"] = {}
         else:
             logger.error(f"Config file is not in use")
 
@@ -371,7 +371,7 @@ class GofileIOUploader:
             logger.warning("No folder was specified")
             if self.api.token:
                 # When no folder is specified and the user has an account, upload to the root folder
-                logger.debug('Using root folder id since we have an API token')
+                logger.debug("Using root folder id since we have an API token")
                 return self.api.root_folder_id
             else:
                 logger.warning("Poorly supported: No API token exists, need to create an temporary account")
@@ -429,17 +429,19 @@ class GofileIOUploader:
         # TODO: Try to parallelize this
         for path in paths:
             if path.is_file():
-                if str(path) in self.options['config']['history']['md5_sums']:
-                    md5_sum_for_file = self.options['config']['history']['md5_sums'][str(path)]
-                    logger.debug(f'Found precomputed md5sum ({md5_sum_for_file}) for path "{path}" using md5_sums config history')
+                if str(path) in self.options["config"]["history"]["md5_sums"]:
+                    md5_sum_for_file = self.options["config"]["history"]["md5_sums"][str(path)]
+                    logger.debug(
+                        f'Found precomputed md5sum ({md5_sum_for_file}) for path "{path}" using md5_sums config history'
+                    )
                     sums[str(path)] = md5_sum_for_file
                 # TODO: Also check the previously uploaded file responses for MD5s of the same path
                 else:
-                    logger.debug(f'Computing new md5sum for file {path}')
+                    logger.debug(f"Computing new md5sum for file {path}")
                     sums[str(path)] = GofileIOUploader.checksum(path)
 
         # Save md5sums to local config cache so we don't have to recompute later
-        self.options['config']['history']['md5_sums'].update(sums)
+        self.options["config"]["history"]["md5_sums"].update(sums)
         self.save_config_file()
 
         return sums
@@ -481,7 +483,9 @@ class GofileIOUploader:
                 logger.info(f"Making folder {folder_id} public")
                 await self.api.update_content(folder_id, "public", "true")
 
-            logger.info(f"{len(paths_to_skip)}/{len(paths)} files will be skipped since they were already uploaded to the folder \"{folder}\"")
+            logger.info(
+                f'{len(paths_to_skip)}/{len(paths)} files will be skipped since they were already uploaded to the folder "{folder}"'
+            )
             paths = [x for x in paths if str(x) not in paths_to_skip]
 
         if paths:
@@ -508,11 +512,10 @@ class GofileIOUploader:
                     for row in responses:
                         csv_writer.writerow(row)
 
-
             else:
                 pprint(responses)
         else:
-            print('No file paths left to upload')
+            print("No file paths left to upload")
 
 
 def cli():

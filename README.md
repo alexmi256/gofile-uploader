@@ -93,7 +93,14 @@ directory/
 
 `gofile-upload --token 123 --folder foo directory`
 
-# Packaging
+# Development
+## Setup
+```bash
+pip install -r requirements-dev.txt
+pre-commit install
+```
+
+## Packaging
 
 # Improvements Wishlist
 - [ ] Paid accounts support, I don't have a paid account so I can't test
