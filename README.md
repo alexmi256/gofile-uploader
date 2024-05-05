@@ -1,4 +1,5 @@
 # GofileIO Uploader
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/GofileIOUploader) ![PyPI - Version](https://img.shields.io/pypi/v/GofileIOUploader)
 
 A python script to upload files or directories to Gofile.io
 Built using `asyncio`, `aiohttp`, and `tqdm`
@@ -101,6 +102,11 @@ pre-commit install
 ```
 
 ## Packaging
+```bash
+python3 -m build
+python3 -m twine upload --repository testpypi dist/*
+```
+
 
 # Improvements Wishlist
 - [ ] Paid accounts support, I don't have a paid account so I can't test
@@ -115,3 +121,4 @@ pre-commit install
 - https://gofile.io/api
 - https://github.com/rkwyu/gofile-dl
 - https://stackoverflow.com/questions/1131220/get-the-md5-hash-of-big-files-in-python
+- https://packaging.python.org/en/latest/tutorials/packaging-projects/
