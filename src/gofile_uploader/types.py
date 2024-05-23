@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Literal, Optional, TypedDict, Union
 
 
@@ -155,3 +156,41 @@ class GofileCLIArgs(TypedDict):
 class GofileCLIDebugOptions(TypedDict):
     save_js_locally: Optional[bool]
     create_config: Optional[bool]
+
+
+# class GofileUploaderOptions(TypedDict):
+#     save_js_locally: Optional[bool]
+#     create_config: Optional[bool]
+#
+#     token: Optional[str]
+#     max_connections: Optional[int]
+#     make_public: Optional[bool]
+#     zone: Optional[str]
+#     retries: Optional[int]
+#     save: Optional[bool]
+
+
+class GofileUploaderLocalConfigHistory(TypedDict):
+    uploads: list[dict]
+    md5_sums: dict[str, str]
+
+
+class GofileUploaderLocalConfigOptions(TypedDict):
+    token: Optional[str]
+    zone: Optional[str]
+    connections: Optional[int]
+    public: Optional[bool]
+    save: Optional[bool]
+    retries: Optional[int]
+    history: GofileUploaderLocalConfigHistory
+
+
+class GofileUploaderOptions(GofileUploaderLocalConfigOptions):
+    dry_run: Optional[str]
+    debug_save_js_locally: Optional[bool]
+    use_config: Optional[bool]
+    folder: Optional[str]
+    file: Path
+    # These options are derived on runtime
+    config_file_path: Optional[Path]
+    config_directory: Optional[Path]

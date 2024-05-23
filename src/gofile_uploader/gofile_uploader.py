@@ -1,21 +1,20 @@
-import argparse
 import asyncio
 import csv
 import hashlib
 import json
 import logging
-import os
 import re
 import time
 from io import BufferedReader
 from pathlib import Path
 from pprint import pformat, pprint
-from typing import Any, Callable, Literal, Optional
+from typing import Callable, Literal, Optional
 
 import aiohttp
 from tqdm import tqdm
 from tqdm.asyncio import tqdm_asyncio
 
+from .cli import cli
 from .types import (
     CompletedFileUploadResult,
     CreateFolderData,
@@ -23,6 +22,7 @@ from .types import (
     GetAccountIdResponse,
     GetContentResponse,
     GetServersResponse,
+    GofileUploaderOptions,
     UpdateContentOption,
     UpdateContentOptionValue,
 )
@@ -67,30 +67,21 @@ class TqdmUpTo(tqdm):
 
 
 class GofileIOAPI:
-    def __init__(
-        self,
-        token: Optional[str] = None,
-        max_connections: int = 4,
-        zone: Optional[Literal["eu", "na"]] = None,
-        retries: int = 1,
-        options: Optional[dict[str, Any]] = None,
-    ):
-        if options is None:
-            options = {}
+    def __init__(self, options: GofileUploaderOptions):
         self.options = options
-        self.token = token
-        self.session_headers = {"Authorization": f"Bearer {self.token}"} if self.token else None
-        self.wt = None
+        self.session_headers = (
+            {"Authorization": f"Bearer {self.options['token']}"} if self.options.get("token") else None
+        )
         self.session = aiohttp.ClientSession("https://api.gofile.io", headers=self.session_headers)
-        self.zone = zone
+        # These are set once the account is queried
         self.root_folder_id = None
         self.account_id = None
         self.is_premium = False
-        self.make_public = False
+
+        self.wt = None
         self.server_sessions = {}
         self.created_folders = {}
-        self.sem = asyncio.Semaphore(max_connections)
-        self.retries = retries
+        self.sem = asyncio.Semaphore(self.options["connections"])
 
     async def init(self):
         account_id = await self.get_account_id()
@@ -99,13 +90,13 @@ class GofileIOAPI:
         if self.wt is None:
             self.wt = await self.get_wt()
 
-        if self.token is not None:
+        if self.options.get("token") is not None:
             account = await self.get_account_details(self.account_id)
             self.root_folder_id = account["data"]["rootFolder"]
             self.is_premium = account["data"]["tier"] != "standard"
 
     def check_public_account(self):
-        if self.token is None:
+        if self.options.get("token") is None:
             raise Exception(f"Cannot perform functionality for public account, create and account and provide a token")
 
     def check_premium_status(self):
@@ -216,10 +207,10 @@ class GofileIOAPI:
         }
         async with self.sem:
             retries = 0
-            while retries < self.retries:
+            while retries < self.options["retries"]:
                 try:
                     # TODO: Rate limit to one request every 10 seconds
-                    servers = await self.get_servers(zone=self.zone)
+                    servers = await self.get_servers(zone=self.options.get("zone"))
 
                     server = next(iter(servers["data"]["servers"]))["name"]
                     if server not in self.server_sessions:
@@ -254,7 +245,7 @@ class GofileIOAPI:
                                 file_metadata.update(response["data"])
                                 file_metadata["uploadSuccess"] = response.get("status")
                                 if file_metadata["uploadSuccess"] == "ok":
-                                    self.options["config"]["history"]["uploads"].append(file_metadata)
+                                    self.options["history"]["uploads"].append(file_metadata)
                                 return file_metadata
 
                 except Exception as e:
@@ -276,35 +267,13 @@ class GofileIOAPI:
 
 
 class GofileIOUploader:
-    def __init__(
-        self,
-        token: Optional[str] = None,
-        max_connections: int = 4,
-        make_public: bool = False,
-        zone: Optional[Literal["eu", "na"]] = None,
-        retries: int = 1,
-        options: Optional[dict[str, Any]] = None,
-    ):
-        # I hate having these in both Uploader and Client but client is supposed to be dumb and have less logic
-        # which leads to annoying complexity
-        if options is None:
-            options = {}
+    def __init__(self, options: GofileUploaderOptions):
         self.options = options
-
-        self.api = GofileIOAPI(token, max_connections=max_connections, zone=zone, retries=retries, options=options)
-        self.make_public = make_public
-
-        # Let's create and/or load a config if one was used
-        home_path = Path.home()
-
-        self.config_directory = home_path.joinpath(".config", "gofile-upload")
-        self.config_file_path = self.config_directory.joinpath("config.json")
-        # Only use a config if the user has authorized (which is set to true by default)
-        self.load_config_file()
+        self.api = GofileIOAPI(options)
 
     async def init(self) -> None:
         try:
-            if self.api.token is not None:
+            if self.options.get("token") is not None:
                 await self.api.init()
             # We should get the wt even if we don't have an account
             if self.api.wt is None:
@@ -319,46 +288,32 @@ class GofileIOUploader:
         Creates the config directory and file with the current config options if using config is enabled
         """
         if self.options.get("use_config"):
-            if not self.config_directory.exists():
-                logger.info(f"Creating config directory at {self.config_directory}")
-                self.config_directory.mkdir(parents=True, exist_ok=True)
+            config_directory = self.options["config_directory"]
+            config_file_path = self.options["config_file_path"]
+            if not config_directory.exists():
+                logger.info(f"Creating config directory at {config_directory}")
+                config_directory.mkdir(parents=True, exist_ok=True)
 
-            with open(self.config_file_path, "w") as config_file:
-                logger.debug(f"Saving config to {self.config_file_path}")
-                json.dump(self.options["config"], config_file, indent=2)
-        else:
-            logger.error(f"Config file is not in use")
+            with open(config_file_path, "w") as config_file:
+                logger.debug(f"Saving config to {config_file_path}")
 
-    def load_config_file(self):
-        """
-        Loads the config file to config options if using config is enabled
-        """
-        if self.options.get("use_config"):
-            if self.config_file_path.exists():
-                with open(self.config_file_path, "r") as config_file:
-                    logger.debug(f"Loading config from {self.config_file_path}")
-                    try:
-                        self.options["config"] = json.load(config_file)
-                    except Exception:
-                        logger.exception(f"Failed to load config file {self.config_file_path} as a JSON config")
-            else:
-                logger.error(f"Could not load config file {self.config_file_path} because it did not exist")
-                self.create_config_defaults()
-                self.save_config_file()
-        else:
-            logger.error(f"Config file is not in use, creating them in memory only")
-            self.create_config_defaults()
+                # Only GofileUploaderLocalConfigOptions should be saved locally because the other ones don't make sense
+                # to save
+                config_history = {
+                    "md5_sums": self.options.get("history", {}).get("md5_sums", {}),
+                    "uploads": self.options.get("history", {}).get("md5_sums", []),
+                }
+                savable_config = {
+                    "token": self.options.get("token"),
+                    "zone": self.options.get("zone"),
+                    "connections": self.options.get("connections"),
+                    "public": self.options.get("public"),
+                    "save": self.options.get("save"),
+                    "retries": self.options.get("retries"),
+                    "history": config_history,
+                }
 
-    def create_config_defaults(self):
-        if self.options["use_config"]:
-            if "config" not in self.options:
-                self.options["config"] = {}
-            if "history" not in self.options["config"]:
-                self.options["config"]["history"] = {}
-            if "uploads" not in self.options["config"]["history"]:
-                self.options["config"]["history"]["uploads"] = []
-            if "md5_sums" not in self.options["config"]["history"]:
-                self.options["config"]["history"]["md5_sums"] = {}
+                json.dump(savable_config, config_file, indent=2)
         else:
             logger.error(f"Config file is not in use")
 
@@ -371,7 +326,7 @@ class GofileIOUploader:
         # No folder provided, try to use root folder
         if folder is None:
             logger.warning("No folder was specified")
-            if self.api.token:
+            if self.options.get("token"):
                 # When no folder is specified and the user has an account, upload to the root folder
                 logger.debug("Using root folder id since we have an API token")
                 return self.api.root_folder_id
@@ -387,7 +342,7 @@ class GofileIOUploader:
             )
             return folder
         # Folder needs to be created or already exists
-        elif self.api.token:
+        elif self.options.get("token"):
             root_folder_contents = await self.api.get_content(self.api.root_folder_id, cache=True, password=None)
 
             # Another case that tbh don't name much sense but the user might specify "root" folder name which
@@ -412,7 +367,7 @@ class GofileIOUploader:
                 )
                 return folder_with_same_name["id"]
             else:
-                # We couldn't find a previosuly created folder with the same name so we should create a new one
+                # We couldn't find a previously created folder with the same name so we should create a new one
                 logger.info(
                     f'Could not find a folder inside the root folder with the name "{folder}" so we will create one'
                 )
@@ -423,16 +378,13 @@ class GofileIOUploader:
             return None
 
     def get_md5_sums_for_files(self, paths: list[Path]) -> dict[str, str]:
-        # Create the config paths for easier lookups just in case they didn't exist
-        self.create_config_defaults()
-
         sums = {}
 
         # TODO: Try to parallelize this
         for path in paths:
             if path.is_file():
-                if str(path) in self.options["config"]["history"]["md5_sums"]:
-                    md5_sum_for_file = self.options["config"]["history"]["md5_sums"][str(path)]
+                if str(path) in self.options["history"]["md5_sums"]:
+                    md5_sum_for_file = self.options["history"]["md5_sums"][str(path)]
                     logger.debug(
                         f'Found precomputed md5sum ({md5_sum_for_file}) for path "{path}" using md5_sums config history'
                     )
@@ -443,7 +395,8 @@ class GofileIOUploader:
                     sums[str(path)] = GofileIOUploader.checksum(path)
 
         # Save md5sums to local config cache so we don't have to recompute later
-        self.options["config"]["history"]["md5_sums"].update(sums)
+        self.options["history"]["md5_sums"].update(sums)
+        # Update the current configs since we could have calculated md5 sums
         self.save_config_file()
 
         return sums
@@ -459,15 +412,13 @@ class GofileIOUploader:
                 h.update(chunk)
         return h.hexdigest()
 
-    async def upload_files(self, path: str, folder: Optional[str] = None, save: bool = True) -> None:
-        contents = Path(path)
-
-        if contents.is_file():
-            paths = [contents]
+    async def upload_files(self, path: Path, folder: Optional[str] = None, save: bool = True) -> None:
+        if path.is_file():
+            paths = [path]
         else:
-            paths = [x for x in contents.iterdir()]
+            paths = [x for x in path.iterdir()]
             if folder is None:
-                folder = contents.name
+                folder = path.name
         folder_id = await self.get_folder_id(folder)
 
         if folder_id:
@@ -481,7 +432,11 @@ class GofileIOUploader:
             paths_and_md5_sums = self.get_md5_sums_for_files(paths)
             paths_to_skip = [k for k, v in paths_and_md5_sums.items() if v in md5_sums_of_items_in_folder]
 
-            if self.make_public and folder_id != self.api.root_folder_id and not folder_id_contents["data"]["public"]:
+            if (
+                self.options["public"]
+                and folder_id != self.api.root_folder_id
+                and not folder_id_contents["data"]["public"]
+            ):
                 logger.info(f"Making folder {folder_id} public")
                 await self.api.update_content(folder_id, "public", "true")
 
@@ -496,6 +451,7 @@ class GofileIOUploader:
                 file_name = f"gofile_upload_{int(time.time())}.csv"
                 with open(file_name, "w", newline="") as csvfile:
                     logger.info(f"Saving uploaded files to {file_name}")
+                    # FIXME: Get these dynamically
                     field_names = [
                         "filePath",
                         "filePathMD5",
@@ -520,95 +476,18 @@ class GofileIOUploader:
             print("No file paths left to upload")
 
 
-def cli():
-    parser = argparse.ArgumentParser(prog="gofile-upload", description="Gofile.io Uploader supporting parallel uploads")
-    parser.add_argument("file", type=str, help="File or directory to look for files in to upload")
-    parser.add_argument(
-        "-t",
-        "--token",
-        type=str,
-        default=os.getenv("GOFILE_TOKEN"),
-        help="""API token for your account so that you can upload to a specific account/folder.
-                You can also set the GOFILE_TOKEN environment variable for this""",
-    )
-    parser.add_argument(
-        "-z",
-        "--zone",
-        type=str,
-        choices=["na", "eu"],
-        help="Server zone to prefer uploading to",
-    )
-    parser.add_argument(
-        "-f", "--folder", type=str, help="Folder to upload files to overriding the directory name if used"
-    )
-    parser.add_argument(
-        "-d",
-        "--dry-run",
-        action="store_true",
-        help="Don't create folders or upload files",
-    )
-    parser.add_argument(
-        "--debug-save-js-locally",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Debug option to save the retrieved js file locally",
-    )
-    parser.add_argument("-c", "--connections", type=int, default=6, help="Maximum parallel uploads to do at once")
-    parser.add_argument(
-        "--public",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Make all files uploaded public. By default they are private and not unsharable",
-    )
-    parser.add_argument(
-        "--save",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help='Don\'t save uploaded file urls to a "gofile_upload_<unixtime>.csv" file',
-    )
-    parser.add_argument(
-        "--use-config",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Whether to create and use a config file in $HOME/.config/gofile_upload/config.json",
-    )
-    parser.add_argument(
-        "-r",
-        "--retries",
-        default=3,
-        type=int,
-        help="How many times to retry a failed upload",
-    )
-    args = parser.parse_args()
-
-    return args
-
-
 async def async_main() -> None:
-    args = cli()
-    logger.debug(args)
+    options = cli()
+    logger.debug(options)
 
-    options = {}
-    if args.debug_save_js_locally:
-        options["debug_save_js_locally"] = args.debug_save_js_locally
-    if args.use_config:
-        options["use_config"] = args.use_config
-
-    gofile_client = GofileIOUploader(
-        args.token,
-        max_connections=args.connections,
-        make_public=args.public,
-        zone=args.zone,
-        retries=args.retries,
-        options=options,
-    )
+    gofile_client = GofileIOUploader(options)
 
     try:
         await gofile_client.init()
-        if args.dry_run:
+        if options["dry_run"]:
             print("Dry run only, uploading skipped")
         else:
-            await gofile_client.upload_files(args.file, args.folder, args.save)
+            await gofile_client.upload_files(options["file"], options["folder"], options["save"])
     finally:
         if not gofile_client.api.session.closed:
             await gofile_client.api.session.close()
