@@ -158,18 +158,6 @@ class GofileCLIDebugOptions(TypedDict):
     create_config: Optional[bool]
 
 
-# class GofileUploaderOptions(TypedDict):
-#     save_js_locally: Optional[bool]
-#     create_config: Optional[bool]
-#
-#     token: Optional[str]
-#     max_connections: Optional[int]
-#     make_public: Optional[bool]
-#     zone: Optional[str]
-#     retries: Optional[int]
-#     save: Optional[bool]
-
-
 class GofileUploaderLocalConfigHistory(TypedDict):
     uploads: list[dict]
     md5_sums: dict[str, str]

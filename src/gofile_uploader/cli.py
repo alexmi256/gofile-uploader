@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 from .types import GofileUploaderLocalConfigOptions, GofileUploaderOptions
+from .utils import return_dict_without_none_value_keys
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
@@ -15,9 +16,11 @@ def load_config_file(config_file_path: Path) -> GofileUploaderLocalConfigOptions
     Loads the local config file, options with None values will be omitted
     """
     config = {}
+    logger.debug(f"Local config path specified as {config_file_path}")
     if config_file_path.exists():
+        logger.debug(f"Loading config from {config_file_path}")
         with open(config_file_path, "r") as config_file:
-            logger.debug(f"Loading config from {config_file_path}")
+
             try:
                 loaded_config = json.load(config_file)
                 config = {k: v for k, v in loaded_config.items() if v is not None}
@@ -25,10 +28,21 @@ def load_config_file(config_file_path: Path) -> GofileUploaderLocalConfigOptions
                 logger.exception(f"Failed to load config file {config_file_path} as a JSON config")
     else:
         logger.error(f"Could not load config file {config_file_path} because it did not exist")
-    return config
+    return return_dict_without_none_value_keys(config)
 
 
 def cli() -> GofileUploaderOptions:
+
+    # These are options that the CLI will default to when they have the BooleanOptionalAction action.
+    # We do this because BooleanOptionalAction has 3 states of None/True/False which we need for the None value
+    # as using store_true/store_false actions would prevent the local config from ever overriding the CLI
+    default_cli_options = {
+        "connections": 6,
+        "public": False,
+        "retries": 3,
+        "save": True,
+        "debug_save_js_locally": False,
+    }
     parser = argparse.ArgumentParser(prog="gofile-upload", description="Gofile.io Uploader supporting parallel uploads")
     parser.add_argument("file", type=Path, help="File or directory to look for files in to upload")
     parser.add_argument(
@@ -58,40 +72,44 @@ def cli() -> GofileUploaderOptions:
     parser.add_argument(
         "--debug-save-js-locally",
         action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Debug option to save the retrieved js file locally",
+        help=f"Debug option to save the retrieved js file locally. (default: {default_cli_options['debug_save_js_locally']})",
     )
-    parser.add_argument("-c", "--connections", type=int, default=6, help="Maximum parallel uploads to do at once")
+    parser.add_argument(
+        "-c",
+        "--connections",
+        type=int,
+        help=f"Maximum parallel uploads to do at once. (default: {default_cli_options['connections']})",
+    )
     parser.add_argument(
         "--public",
         action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Make all files uploaded public. By default they are private and not unsharable",
+        help=f"Make all files uploaded public. By default they are private and not unsharable. (default: {default_cli_options['public']})",
     )
     parser.add_argument(
         "--save",
         action=argparse.BooleanOptionalAction,
-        default=True,
-        help='Don\'t save uploaded file urls to a "gofile_upload_<unixtime>.csv" file',
+        help=f"Don't save uploaded file urls to a \"gofile_upload_<unixtime>.csv\" file. (default: {default_cli_options['save']})",
     )
     parser.add_argument(
         "--use-config",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Whether to create and use a config file in $HOME/.config/gofile_upload/config.json",
+        help=f"Whether to create and use a config file in $HOME/.config/gofile_upload/config.json.",
     )
     parser.add_argument(
         "-r",
         "--retries",
-        default=3,
         type=int,
-        help="How many times to retry a failed upload",
+        help=f"How many times to retry a failed upload. (default: {default_cli_options['retries']})",
     )
     args = parser.parse_args()
 
     loaded_options = {}
 
     combined_options: GofileUploaderOptions = {"config_file_path": None, "config_directory": None}  # type: ignore
+
+    # Load the faked CLI default options first
+    combined_options.update(default_cli_options)
 
     # Load any local configs
     if args.use_config:
@@ -104,7 +122,7 @@ def cli() -> GofileUploaderOptions:
         combined_options["config_directory"] = config_directory
 
     # Load the CLI configs
-    cli_options = vars(args)
+    cli_options = return_dict_without_none_value_keys(vars(args))
 
     # Overwrite with local
     combined_options.update(loaded_options)
