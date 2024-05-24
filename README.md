@@ -153,15 +153,14 @@ pre-commit install
 ```
 
 ## Packaging
-```bash
-python3 -m build
-python3 -m twine upload --skip-existing --repository pypi dist/*
-```
+This package currently uses [just](https://github.com/casey/just which is a Makefile like utility.
 
+You must install `just` first and then you can do things like `just build` or `just release` which depend on the `justfile` to take actions.
 
 # Improvements Wishlist
 - [ ] Paid accounts support, I don't have a paid account so I can't test
 - [ ] Add tests
+- [ ] Use typing-extensions
 - [ ] Add github runners for tests
 - [ ] Recursive directory upload support
 
@@ -173,3 +172,4 @@ python3 -m twine upload --skip-existing --repository pypi dist/*
 - https://github.com/rkwyu/gofile-dl
 - https://stackoverflow.com/questions/1131220/get-the-md5-hash-of-big-files-in-python
 - https://packaging.python.org/en/latest/tutorials/packaging-projects/
+- https://github.com/f-o
