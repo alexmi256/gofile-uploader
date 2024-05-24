@@ -106,7 +106,14 @@ def cli() -> GofileUploaderOptions:
 
     loaded_options = {}
 
-    combined_options: GofileUploaderOptions = {"config_file_path": None, "config_directory": None}  # type: ignore
+    combined_options: GofileUploaderOptions = {  # type: ignore
+        "config_file_path": None,
+        "config_directory": None,
+        "history": {
+            "md5_sums": {},
+            "uploads": [],
+        },
+    }
 
     # Load the faked CLI default options first
     combined_options.update(default_cli_options)

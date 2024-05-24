@@ -24,7 +24,7 @@ from .types import (
     UpdateContentOption,
     UpdateContentOptionValue,
 )
-from .utils import ProgressFileReader, TqdmUpTo
+from .utils import ProgressFileReader, TqdmUpTo, return_dict_without_none_value_keys
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
@@ -265,7 +265,7 @@ class GofileIOUploader:
                 # to save
                 config_history = {
                     "md5_sums": self.options.get("history", {}).get("md5_sums", {}),
-                    "uploads": self.options.get("history", {}).get("md5_sums", []),
+                    "uploads": self.options.get("history", {}).get("uploads", []),
                 }
                 savable_config = {
                     "token": self.options.get("token"),
@@ -276,8 +276,9 @@ class GofileIOUploader:
                     "retries": self.options.get("retries"),
                     "history": config_history,
                 }
-
-                json.dump(savable_config, config_file, indent=2)
+                logger.debug(savable_config)
+                config = return_dict_without_none_value_keys(savable_config)
+                json.dump(config, config_file, indent=2)
         else:
             logger.error(f"Config file is not in use")
 
@@ -376,7 +377,7 @@ class GofileIOUploader:
                 h.update(chunk)
         return h.hexdigest()
 
-    async def upload_files(self, path: Path, folder: Optional[str] = None, save: bool = True) -> None:
+    async def upload_files(self, path: Path, folder: Optional[str] = None) -> None:
         if path.is_file():
             paths = [path]
         else:
@@ -411,24 +412,11 @@ class GofileIOUploader:
 
         if paths:
             responses = await self.api.upload_files(paths, folder_id)
-            if save and responses:
+            if self.options.get("save") and responses:
                 file_name = f"gofile_upload_{int(time.time())}.csv"
                 with open(file_name, "w", newline="") as csvfile:
                     logger.info(f"Saving uploaded files to {file_name}")
-                    # FIXME: Get these dynamically
-                    field_names = [
-                        "filePath",
-                        "filePathMD5",
-                        "fileNameMD5",
-                        "uploadSuccess",
-                        "code",
-                        "downloadPage",
-                        "fileId",
-                        "fileName",
-                        "guestToken",
-                        "md5",
-                        "parentFolder",
-                    ]
+                    field_names = list(set().union(*[x.keys() for x in responses if x]))
                     csv_writer = csv.DictWriter(csvfile, dialect="excel", fieldnames=field_names)
                     csv_writer.writeheader()
                     for row in responses:
@@ -451,7 +439,7 @@ async def async_main() -> None:
         if options["dry_run"]:
             print("Dry run only, uploading skipped")
         else:
-            await gofile_client.upload_files(options["file"], options["folder"], options["save"])
+            await gofile_client.upload_files(options["file"], options.get("folder"))
     finally:
         if not gofile_client.api.session.closed:
             await gofile_client.api.session.close()
