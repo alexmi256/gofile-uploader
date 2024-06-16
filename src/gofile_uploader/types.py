@@ -1,9 +1,26 @@
 from pathlib import Path
-from typing import Literal, Optional, TypedDict, Union
+
+from typing_extensions import (
+    Literal,
+    NotRequired,
+    Optional,
+    TypeAlias,
+    TypedDict,
+    Union,
+)
 
 
 class ServerResponse(TypedDict):
     status: str
+
+
+class GetNewAccountData(TypedDict):
+    id: str
+    token: str
+
+
+class GetNewAccountResponse(ServerResponse):
+    data: GetNewAccountData
 
 
 class CreateFolderData(TypedDict):
@@ -66,22 +83,25 @@ class GetAccountIdResponse(ServerResponse):
 
 
 class GetContentChildFile(TypedDict):
+    isOwner: bool
     id: str
-    type: str
+    parentFolder: str
+    type: Literal["folder", "file"]
     name: str
     createTime: int
     size: int
     downloadCount: int
     md5: str
     mimetype: str
+    servers: list[str]
     serverSelected: str
     link: str
-    thumbnail: str
+    thumbnail: NotRequired[str]
 
 
 class GetContentChildFolder(TypedDict):
     id: str
-    type: str
+    type: Literal["folder", "file"]
     name: str
     code: str
     createTime: int
@@ -89,24 +109,28 @@ class GetContentChildFolder(TypedDict):
     childrenIds: list[str]
 
 
-class GetContentData(TypedDict):
+class GetFolderContentData(TypedDict):
     isOwner: bool
     id: str
-    type: str
+    type: Literal["folder", "file"]
     name: str
+    createTime: int
     parentFolder: str
     code: str
-    createTime: int
-    isRoot: bool
     public: bool
     totalDownloadCount: int
     totalSize: int
     childrenIds: list[str]
     children: dict[str, Union[GetContentChildFile, GetContentChildFolder]]
+    # Only for root folder AFAICT
+    isRoot: NotRequired[bool]
+
+
+GetFileContentData: TypeAlias = GetContentChildFile
 
 
 class GetContentResponse(ServerResponse):
-    data: GetContentData
+    data: Union[GetFolderContentData, GetFileContentData]
 
 
 UpdateContentOption = Literal["name", "description", "tags", "public", "expiry", "password"]
@@ -135,6 +159,15 @@ class UploadFileData(TypedDict):
 
 class UploadFileResponse(ServerResponse):
     data: UploadFileData
+
+
+class UpdateContentResponse(ServerResponse):
+    # AFAICT This is always empty
+    data: dict
+
+
+class DeleteContentsResponse(ServerResponse):
+    data: dict[str, UpdateContentResponse]
 
 
 class CompletedFileUploadResult(UploadFileData):

@@ -5,3 +5,8 @@ isort
 pre-commit
 twine
 build
+typing-extensions
+pytest
+pytest-asyncio
+pydantic
+pytest-cov
