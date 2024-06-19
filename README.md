@@ -157,10 +157,52 @@ This package currently uses [just](https://github.com/casey/just which is a Make
 
 You must install `just` first and then you can do things like `just build` or `just release` which depend on the `justfile` to take actions.
 
+# Testing
+**WARNING:** Tests will use a gofile account and are destructive (they will delete all created files). 
+Do not use your regular account for tests and be careful of running tests in the same environment if a `GOFILE_TOKEN` environment variable exists.
+
+This packages uses [pytest](https://docs.pydantic.dev/latest/) and [pytest-asyncio](https://pytest-asyncio.readthedocs.io/en/latest/) for testing.
+In order to omit different pytest async decorators, pytest has its configuration setup in `pyproject.toml` to
+```
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+```
+In practice this is of little value because pytest-asyncio seems to be [a mess](https://github.com/pytest-dev/pytest-asyncio/issues/706) when working with fixtures at different scopes. 
+I've ended up setting all fixtures and tests to session based levels even when it does not make sense but at least this does work.
+
+It also makes use of [pydantic](https://docs.pytest.org) in order to try and validate that certain server responses match the TypedDicts I've setup.
+If there is a better way to do this please let me know or draft a PR.
+
+You should set the gofile token in your environment so that new accounts are not created for each test.
+This can be done via something like `export GOFILE_TOKEN=123` or your IDE.
+
+To test you can run the following from the root directory:
+```
+(venv) [alex@xyz gofile-uploader]$ pytest src/gofile_uploader
+============================ test session starts ============================
+platform linux -- Python 3.9.18, pytest-8.2.2, pluggy-1.5.0
+rootdir: /home/alex/PycharmProjects/gofile-uploader
+configfile: pyproject.toml
+plugins: asyncio-0.23.7
+asyncio: mode=auto
+collected 3 items                                                           
+
+src/gofile_uploader/tests/test_api_servers.py ..                      [ 66%]
+src/gofile_uploader/tests/test_api_wt.py .                            [100%]
+
+============================= 3 passed in 1.05s =============================
+```
+
+## Coverage
+Test coverage is also generated using [pytest-cov](https://github.com/pytest-dev/pytest-cov).
+You should disable this when debugging.
+
+
 # Improvements Wishlist
 - [ ] Paid accounts support, I don't have a paid account so I can't test
-- [ ] Add tests
-- [ ] Use typing-extensions
+- [ ] Update filenames during sync to local version
+- [ ] Add more tests
+- [ ] Create an account when the user does not do so
 - [ ] Add github runners for tests
 - [ ] Recursive directory upload support
 
@@ -173,3 +215,4 @@ You must install `just` first and then you can do things like `just build` or `j
 - https://stackoverflow.com/questions/1131220/get-the-md5-hash-of-big-files-in-python
 - https://packaging.python.org/en/latest/tutorials/packaging-projects/
 - https://github.com/f-o
+- https://stackoverflow.com/questions/66665336/validate-python-typeddict-at-runtime

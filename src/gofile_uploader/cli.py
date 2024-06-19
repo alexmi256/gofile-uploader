@@ -44,7 +44,7 @@ def cli() -> GofileUploaderOptions:
         "debug_save_js_locally": False,
     }
     parser = argparse.ArgumentParser(prog="gofile-upload", description="Gofile.io Uploader supporting parallel uploads")
-    parser.add_argument("file", type=Path, help="File or directory to look for files in to upload")
+    parser.add_argument("file", type=Path, help="File or example_files to look for files in to upload")
     parser.add_argument(
         "-t",
         "--token",
@@ -61,7 +61,7 @@ def cli() -> GofileUploaderOptions:
         help="Server zone to prefer uploading to",
     )
     parser.add_argument(
-        "-f", "--folder", type=str, help="Folder to upload files to overriding the directory name if used"
+        "-f", "--folder", type=str, help="Folder to upload files to overriding the example_files name if used"
     )
     parser.add_argument(
         "-d",
