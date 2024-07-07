@@ -200,10 +200,7 @@ You should disable this when debugging.
 
 # Improvements Wishlist
 - [ ] Paid accounts support, I don't have a paid account so I can't test
-- [ ] Update filenames during sync to local version
 - [ ] Add more tests
-- [ ] Create an account when the user does not do so
-- [ ] Add github runners for tests
 - [ ] Recursive directory upload support
 
 # Thanks
