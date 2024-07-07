@@ -8,6 +8,8 @@ on:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
+  schedule:
+    - cron: "22 5 * * *"
 
 permissions:
   contents: read
@@ -32,3 +34,9 @@ jobs:
     - name: Test with pytest
       run: |
         pytest src/gofile_uploader/tests/
+    - name: Save Coverage
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage
+        path: htmlcov/
+
