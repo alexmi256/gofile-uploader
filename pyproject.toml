@@ -17,7 +17,7 @@ profile = "black"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-addopts = "--cov=src/gofile_uploader -p no:warnings --cov-branch --cov-report html"
+addopts = "--cov=src/gofile_uploader -p no:warnings --cov-branch --cov-report html --cov-report xml"
 # addopts = "--cov=src/gofile_uploader --no-cov"
 
 [tool.coverage.run]
