@@ -209,6 +209,7 @@ class GofileUploaderLocalConfigOptions(TypedDict):
 class GofileUploaderOptions(GofileUploaderLocalConfigOptions):
     dry_run: Optional[str]
     debug_save_js_locally: Optional[bool]
+    rename_existing: Optional[bool]
     use_config: Optional[bool]
     folder: Optional[str]
     file: Path

@@ -42,6 +42,7 @@ def cli() -> GofileUploaderOptions:
         "retries": 3,
         "save": True,
         "debug_save_js_locally": False,
+        "rename_existing": True,
     }
     parser = argparse.ArgumentParser(prog="gofile-upload", description="Gofile.io Uploader supporting parallel uploads")
     parser.add_argument("file", type=Path, help="File or example_files to look for files in to upload")
@@ -73,6 +74,11 @@ def cli() -> GofileUploaderOptions:
         "--debug-save-js-locally",
         action=argparse.BooleanOptionalAction,
         help=f"Debug option to save the retrieved js file locally. (default: {default_cli_options['debug_save_js_locally']})",
+    )
+    parser.add_argument(
+        "--rename-existing",
+        action=argparse.BooleanOptionalAction,
+        help=f"If a file is already found on the remote server but the names differ, rename the file to its local name. (default: {default_cli_options['rename_existing']})",
     )
     parser.add_argument(
         "-c",

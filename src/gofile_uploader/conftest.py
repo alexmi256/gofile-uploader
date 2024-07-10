@@ -28,6 +28,7 @@ BASE_CONFIG = {
     },
     "dry_run": False,
     "debug_save_js_locally": False,
+    "rename_existing": True,
     "use_config": False,
     "folder": None,
     "file": Path("src/gofile_uploader/tests/example_files/file1.txt"),
@@ -140,6 +141,61 @@ async def file_in_folder(base_cli_config_api_with_account_initialized, folder_fr
 
     file_uploaded = await api.upload_file(file_path, content_id)
     yield file_uploaded
+
+
+@pytest_asyncio.fixture(scope="session")
+async def initialized_client(base_cli_config):
+    config = deepcopy(base_cli_config)
+
+    existing_api_key = os.environ.get("GOFILE_TOKEN")
+    if existing_api_key:
+        token = existing_api_key.strip()
+    else:
+        new_account = await GofileIOAPI.get_new_account()
+        token = new_account["data"]["token"]
+
+    config["token"] = token
+
+    client = GofileIOUploader(config)
+    await client.api.init()
+
+    yield client
+
+    await client.cleanup_api_sessions()
+
+
+@pytest_asyncio.fixture(scope="session")
+async def folder_for_initialized_client(initialized_client):
+    client = initialized_client
+
+    folder_name = str("test_folder_2")
+    create_folder_response = await client.api.create_folder(client.api.root_folder_id, folder_name)
+
+    yield create_folder_response
+
+    root_folder_contents = await client.api.get_content(client.api.root_folder_id, None, None)
+    root_folder_items: list[str] = root_folder_contents["data"]["childrenIds"]  # type: ignore
+    if root_folder_items:
+        await client.api.delete_contents(root_folder_items)
+
+
+@pytest_asyncio.fixture(scope="session")
+async def renamed_file_in_folder(folder_for_initialized_client, initialized_client):
+    client = initialized_client
+    folder = folder_for_initialized_client
+
+    file_path = Path("src/gofile_uploader/tests/example_files/file1-copy.txt")
+
+    with open(file_path, "x") as file:
+        file.write("hello world 1")
+
+    content_id = folder["data"]["folderId"]
+
+    file_uploaded = await client.api.upload_file(file_path, content_id)
+
+    yield file_uploaded
+
+    file_path.unlink(missing_ok=True)
 
 
 @pytest_asyncio.fixture(scope="session")

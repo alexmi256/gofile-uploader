@@ -76,10 +76,15 @@ class GofileIOAPI:
         async with aiohttp.ClientSession() as session:
             async with session.post("https://api.gofile.io/accounts") as resp:
                 response = await resp.json()
-                if "status" not in response or response["status"] != "ok":
-                    logger.error(pformat(response))
-                    raise Exception(response)
+                GofileIOAPI.raise_error_if_error_in_remote_response(response)
                 return response
+
+    @staticmethod
+    def raise_error_if_error_in_remote_response(response):
+        if response and ("error" in response.get("status", "") or response.get("status", "") != "ok"):
+            msg = f"Failed getting response from server:\n{pformat(response)}"
+            logger.exception(msg)
+            raise Exception(msg)
 
     def raise_error_if_not_premium_status(self):
         if self.is_premium is False:
@@ -112,14 +117,13 @@ class GofileIOAPI:
         params = {"zone": zone} if zone else None
         async with self.session.get("/servers", params=params) as resp:
             response = await resp.json()
-            if "status" not in response or response["status"] != "ok":
-                logger.error(pformat(response))
-                raise Exception(response)
+            GofileIOAPI.raise_error_if_error_in_remote_response(response)
             return response
 
     async def get_account_id(self) -> GetAccountIdResponse:
         async with self.session.get("/accounts/getid") as resp:
             response = await resp.json()
+            GofileIOAPI.raise_error_if_error_in_remote_response(response)
             logger.debug(f'Account id is "{response["data"]["id"]}"')
             return response
 
@@ -139,8 +143,12 @@ class GofileIOAPI:
             self.raise_error_if_not_premium_status()
 
         params = {}
-        if cache:
+        if cache is False:
+            params["cache"] = "false"
+        # Could also make this match against `is True` but maybe using cached responses is better
+        elif cache:
             params["cache"] = "true"
+
         if self.wt:
             params["wt"] = self.wt
         if password:
@@ -158,8 +166,7 @@ class GofileIOAPI:
         logger.debug(f"Creating new folder '{folder_name}' in parent folder id '{parent_folder_id}' ")
         async with self.session.post("/contents/createfolder", data=data) as resp:
             response = await resp.json()
-            if "status" not in response or response["status"] != "ok":
-                raise Exception(response)
+            GofileIOAPI.raise_error_if_error_in_remote_response(response)
             logger.debug(
                 f'Folder "{response["data"]["name"]}" ({response["data"]["folderId"]}) created in {response["data"]["parentFolder"]}'
             )
@@ -172,23 +179,20 @@ class GofileIOAPI:
         data = {"attribute": option, "attributeValue": value}
         async with self.session.put(f"/contents/{content_id}/update", data=data) as resp:
             response = await resp.json()
-            if "status" not in response or response["status"] != "ok":
-                raise Exception(response)
+            GofileIOAPI.raise_error_if_error_in_remote_response(response)
             return response
 
     async def delete_content(self, content_id: str) -> UpdateContentResponse:
         async with self.session.delete(f"/contents/{content_id}") as resp:
             response = await resp.json()
-            if "status" not in response or response["status"] != "ok":
-                raise Exception(response)
+            GofileIOAPI.raise_error_if_error_in_remote_response(response)
             return response
 
     async def delete_contents(self, content_ids: list[str]) -> DeleteContentsResponse:
         data = {"contentsId": ",".join(content_ids)}
         async with self.session.delete(f"/contents", data=data) as resp:
             response = await resp.json()
-            if "status" not in response or response["status"] != "ok":
-                raise Exception(response)
+            GofileIOAPI.raise_error_if_error_in_remote_response(response)
             return response
 
     async def upload_file(self, file_path: Path, folder_id: Optional[str] = None) -> CompletedFileUploadResult:
