@@ -143,8 +143,12 @@ class GofileIOAPI:
             self.raise_error_if_not_premium_status()
 
         params = {}
-        if cache:
+        if cache is False:
+            params["cache"] = "false"
+        # Could also make this match against `is True` but maybe using cached responses is better
+        elif cache:
             params["cache"] = "true"
+
         if self.wt:
             params["wt"] = self.wt
         if password:

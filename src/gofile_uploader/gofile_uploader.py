@@ -201,33 +201,36 @@ class GofileIOUploader:
             )
             paths = [x for x in paths if str(x) not in paths_to_skip]
 
-            # Here begins the code for renaming existing (matched by md5sum) files
-            for existing_file in paths_to_skip:
-                existing_file_md5 = paths_and_md5_sums[existing_file]
-                existing_file_name = Path(existing_file).name
-                # Technically multiple copies of the same file could be uploaded and need renaming
-                matching_remote_files_to_rename = [
-                    x
-                    for x in folder_id_contents["data"].get("children", {}).values()
-                    if x.get("type") == "file" and x.get("md5") == existing_file_md5 and existing_file_name != x["name"]
-                ]
+            if self.options["rename_existing"]:
+                # Here begins the code for renaming existing (matched by md5sum) files
+                for existing_file in paths_to_skip:
+                    existing_file_md5 = paths_and_md5_sums[existing_file]
+                    existing_file_name = Path(existing_file).name
+                    # Technically multiple copies of the same file could be uploaded and need renaming
+                    matching_remote_files_to_rename = [
+                        x
+                        for x in folder_id_contents["data"].get("children", {}).values()
+                        if x.get("type") == "file"
+                        and x.get("md5") == existing_file_md5
+                        and existing_file_name != x["name"]
+                    ]
 
-                if matching_remote_files_to_rename:
-                    logger.debug(
-                        f"File {existing_file} matched against md5 {existing_file_md5} on the server but with different name. Will renamed."
-                    )
-
-                for content_to_rename in matching_remote_files_to_rename:
-                    logger.info(f'Renaming {content_to_rename["name"]} (server) to {existing_file_name} (local)')
-                    try:
-                        await self.api.update_content(content_to_rename["id"], "name", existing_file_name)
-                        logger.exception(f'Renamed {content_to_rename["name"]} to {existing_file_name}')
-                    except Exception:
-                        logger.exception(
-                            f'Failed to rename file from {content_to_rename["name"]} (server) to {existing_file_name} (local)'
+                    if matching_remote_files_to_rename:
+                        logger.debug(
+                            f"File {existing_file} matched against md5 {existing_file_md5} on the server but with different name. Will renamed."
                         )
 
-                    renamed_files.append(content_to_rename)
+                    for content_to_rename in matching_remote_files_to_rename:
+                        logger.info(f'Renaming {content_to_rename["name"]} (server) to {existing_file_name} (local)')
+                        try:
+                            await self.api.update_content(content_to_rename["id"], "name", existing_file_name)
+                            logger.exception(f'Renamed {content_to_rename["name"]} to {existing_file_name}')
+                        except Exception:
+                            logger.exception(
+                                f'Failed to rename file from {content_to_rename["name"]} (server) to {existing_file_name} (local)'
+                            )
+
+                        renamed_files.append(content_to_rename)
 
         logger.info(f"Renamed {len(renamed_files)}/{len(paths_to_skip)} skipped files")
 
