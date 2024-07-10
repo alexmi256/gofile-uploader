@@ -44,6 +44,7 @@ jobs:
       with:
         filename: coverage.xml
         badge: true
+        output: both
         format: markdown
         fail_below_min: 70
 
