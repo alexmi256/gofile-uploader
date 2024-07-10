@@ -39,4 +39,11 @@ jobs:
       with:
         name: coverage
         path: htmlcov/
+    - name: Code Coverage Summary Report
+      uses: irongut/CodeCoverageSummary@v1.3.0
+      with:
+        filename: coverage.xml
+        badge: true
+        format: markdown
+        fail_below_min: 70
 
