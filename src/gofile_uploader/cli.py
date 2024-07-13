@@ -8,7 +8,7 @@ from .types import GofileUploaderLocalConfigOptions, GofileUploaderOptions
 from .utils import return_dict_without_none_value_keys
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
+# logging.basicConfig(level=logging.INFO)
 
 
 def load_config_file(config_file_path: Path) -> GofileUploaderLocalConfigOptions:
@@ -107,6 +107,13 @@ def cli() -> GofileUploaderOptions:
         "--retries",
         type=int,
         help=f"How many times to retry a failed upload. (default: {default_cli_options['retries']})",
+    )
+    parser.add_argument(
+        "--log",
+        type=str,
+        choices=["debug", "info", "warning", "error", "critical"],
+        default="info",
+        help="Log level",
     )
     args = parser.parse_args()
 

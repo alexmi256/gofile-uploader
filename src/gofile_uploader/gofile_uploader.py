@@ -6,7 +6,7 @@ import logging
 import re
 import time
 from pathlib import Path
-from pprint import pprint
+from pprint import pformat, pprint
 
 from typing_extensions import List, Optional
 
@@ -16,7 +16,7 @@ from .types import CompletedFileUploadResult, GofileUploaderOptions
 from .utils import return_dict_without_none_value_keys
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG, filename="gofile_uploader.log", encoding="utf-8")
 
 
 class GofileIOUploader:
@@ -59,7 +59,7 @@ class GofileIOUploader:
                 config = return_dict_without_none_value_keys(savable_config)
                 json.dump(config, config_file, indent=2)
         else:
-            logger.error(f"Config file is not in use")
+            logger.warning(f"Config file is not in use, will not save locally")
 
     async def get_folder_id(self, folder: Optional[str], cache: bool = True) -> str:
         """
@@ -251,7 +251,12 @@ class GofileIOUploader:
 
 async def async_main() -> None:
     options = cli()
-    logger.debug(options)
+
+    # This probably works even though it's done twice
+    logging_level = getattr(logging, options["log"].upper())
+    logging.basicConfig(level=logging_level)
+
+    logger.debug(pformat(options))
 
     gofile_client = GofileIOUploader(options)
 

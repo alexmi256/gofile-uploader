@@ -1,9 +1,7 @@
 import asyncio
-import logging
 import os
 from copy import deepcopy
 from pathlib import Path
-from pprint import pprint
 from uuid import uuid4
 
 import pytest
@@ -11,9 +9,6 @@ import pytest_asyncio
 
 from src.gofile_uploader.api import GofileIOAPI
 from src.gofile_uploader.gofile_uploader import GofileIOUploader
-
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
 
 BASE_CONFIG = {
     "token": None,

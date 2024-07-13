@@ -213,6 +213,7 @@ class GofileUploaderOptions(GofileUploaderLocalConfigOptions):
     use_config: Optional[bool]
     folder: Optional[str]
     file: Path
+    log: Literal["debug", "info", "warning", "error", "critical"]
     # These options are derived on runtime
     config_file_path: Optional[Path]
     config_directory: Optional[Path]

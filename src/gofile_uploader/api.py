@@ -26,7 +26,7 @@ from .types import (
 from .utils import ProgressFileReader, TqdmUpTo
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
+# logging.basicConfig(level=logging.INFO)
 
 
 class GofileIOAPI:
