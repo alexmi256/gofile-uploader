@@ -83,7 +83,7 @@ class GofileIOAPI:
     def raise_error_if_error_in_remote_response(response):
         if response and ("error" in response.get("status", "") or response.get("status", "") != "ok"):
             msg = f"Failed getting response from server:\n{pformat(response)}"
-            logger.exception(msg)
+            logger.error(msg)
             raise Exception(msg)
 
     def raise_error_if_not_premium_status(self):
@@ -221,7 +221,7 @@ class GofileIOAPI:
                     if server not in self.server_sessions:
                         logger.info(f"Using new server connection to {server}")
                         self.server_sessions[server] = aiohttp.ClientSession(
-                            f"https://{server}.gofile.io", headers=self.session_headers
+                            f"https://{server}.gofile.io", headers=self.session_headers, raise_for_status=True
                         )
 
                     session = self.server_sessions[server]
@@ -243,10 +243,8 @@ class GofileIOAPI:
 
                             async with session.post("/contents/uploadfile", data=data) as resp:
                                 response = await resp.json()
-                                if "status" not in response or response["status"] != "ok":
-                                    raise Exception(
-                                        f'File {file_path.name} failed upload load due to missing or not "ok" status in response:\n{pformat(response)}'
-                                    )
+                                GofileIOAPI.raise_error_if_error_in_remote_response(response)
+
                                 file_metadata.update(response["data"])
                                 file_metadata["uploadSuccess"] = response.get("status")
                                 if file_metadata["uploadSuccess"] == "ok":
@@ -255,7 +253,7 @@ class GofileIOAPI:
 
                 except Exception as e:
                     retries += 1
-                    logger.error(f"Failed to upload {file_path} due to:\n", exc_info=e)
+                    logger.exception(f"Failed to upload {file_path} due to:\n", stack_info=True, exc_info=e)
 
                 return file_metadata
 

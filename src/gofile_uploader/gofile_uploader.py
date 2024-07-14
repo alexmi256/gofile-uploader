@@ -175,7 +175,6 @@ class GofileIOUploader:
         # if one was not provided
         if folder_id:
             folder_id_contents = await self.api.get_content(folder_id, cache=True, password=None)
-            # TODO: Consider more lightweight name-only matching instead of md5sum
 
             md5_sums_of_items_in_folder = [
                 x["md5"] for x in folder_id_contents["data"].get("children", {}).values() if x.get("type") == "file"
@@ -224,11 +223,10 @@ class GofileIOUploader:
                         logger.info(f'Renaming {content_to_rename["name"]} (server) to {existing_file_name} (local)')
                         try:
                             await self.api.update_content(content_to_rename["id"], "name", existing_file_name)
-                            logger.exception(f'Renamed {content_to_rename["name"]} to {existing_file_name}')
-                        except Exception:
-                            logger.exception(
-                                f'Failed to rename file from {content_to_rename["name"]} (server) to {existing_file_name} (local)'
-                            )
+                            logger.info(f'Renamed {content_to_rename["name"]} to {existing_file_name}')
+                        except Exception as e:
+                            msg = f'Failed to rename file from {content_to_rename["name"]} (server) to {existing_file_name} (local)'
+                            logger.exception(msg, exc_info=e, stack_info=True)
 
                         renamed_files.append(content_to_rename)
 
