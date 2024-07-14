@@ -16,7 +16,6 @@ from .types import CompletedFileUploadResult, GofileUploaderOptions
 from .utils import return_dict_without_none_value_keys
 
 logger = logging.getLogger(__name__)
-# logging.basicConfig(level=logging.DEBUG, filename="gofile_uploader.log", encoding="utf-8")
 
 
 class GofileIOUploader:

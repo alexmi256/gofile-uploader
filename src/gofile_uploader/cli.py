@@ -8,7 +8,6 @@ from .types import GofileUploaderLocalConfigOptions, GofileUploaderOptions
 from .utils import return_dict_without_none_value_keys
 
 logger = logging.getLogger(__name__)
-# logging.basicConfig(level=logging.INFO)
 
 
 def load_config_file(config_file_path: Path) -> GofileUploaderLocalConfigOptions:
@@ -47,7 +46,7 @@ def cli() -> GofileUploaderOptions:
         "rename_existing": True,
         # These options are not BooleanOptionalAction but I want them to always appear in the cli options dict
         "log_file": None,
-        "log_level": "info",
+        "log_level": "warning",
         "timeout": 600,
     }
     parser = argparse.ArgumentParser(prog="gofile-upload", description="Gofile.io Uploader supporting parallel uploads")
