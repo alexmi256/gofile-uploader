@@ -220,8 +220,12 @@ class GofileIOAPI:
                     server = next(iter(servers["data"]["servers"]))["name"]
                     if server not in self.server_sessions:
                         logger.info(f"Using new server connection to {server}")
+                        timeout = aiohttp.ClientTimeout(total=self.options["timeout"])
                         self.server_sessions[server] = aiohttp.ClientSession(
-                            f"https://{server}.gofile.io", headers=self.session_headers, raise_for_status=True
+                            f"https://{server}.gofile.io",
+                            headers=self.session_headers,
+                            raise_for_status=True,
+                            timeout=timeout,
                         )
 
                     session = self.server_sessions[server]

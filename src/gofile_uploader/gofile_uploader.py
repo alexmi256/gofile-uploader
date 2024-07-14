@@ -16,7 +16,7 @@ from .types import CompletedFileUploadResult, GofileUploaderOptions
 from .utils import return_dict_without_none_value_keys
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG, filename="gofile_uploader.log", encoding="utf-8")
+# logging.basicConfig(level=logging.DEBUG, filename="gofile_uploader.log", encoding="utf-8")
 
 
 class GofileIOUploader:
@@ -52,10 +52,13 @@ class GofileIOUploader:
                     "connections": self.options.get("connections"),
                     "public": self.options.get("public"),
                     "save": self.options.get("save"),
+                    "log_file": str(self.options.get("log_file")),
+                    "log_level": self.options.get("log_level"),
+                    "timeout": self.options.get("timeout"),
                     "retries": self.options.get("retries"),
                     "history": config_history,
                 }
-                logger.debug(savable_config)
+                logger.debug(pformat(savable_config))
                 config = return_dict_without_none_value_keys(savable_config)
                 json.dump(config, config_file, indent=2)
         else:
@@ -68,7 +71,7 @@ class GofileIOUploader:
         """
         # No folder provided, use root folder (account now always exists since it will create one if none provided)
         if folder is None:
-            logger.warning("No folder was specified, root folder id will be used")
+            logger.info("No folder was specified, root folder id will be used")
             return self.api.root_folder_id
         # Folder is UUIDv4, assume user is referencing to something already created
         elif re.match(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", folder):
@@ -195,9 +198,13 @@ class GofileIOUploader:
                 logger.info(f"Making folder {folder_id} public")
                 await self.api.update_content(folder_id, "public", "true")
 
-            logger.info(
-                f'{len(paths_to_skip)}/{len(paths)} files will be skipped since they were already uploaded to the folder "{folder}"'
-            )
+            skipped_files_msg = f'{len(paths_to_skip)}/{len(paths)} files will be skipped since they were already uploaded to the folder "{folder}"'
+
+            logger.info(skipped_files_msg)
+
+            if len(paths_to_skip):
+                print(skipped_files_msg)
+
             paths = [x for x in paths if str(x) not in paths_to_skip]
 
             if self.options["rename_existing"]:
@@ -230,7 +237,12 @@ class GofileIOUploader:
 
                         renamed_files.append(content_to_rename)
 
-        logger.info(f"Renamed {len(renamed_files)}/{len(paths_to_skip)} skipped files")
+        renamed_files_msg = f"Renamed {len(renamed_files)}/{len(paths_to_skip)} skipped files"
+
+        logger.info(renamed_files_msg)
+
+        if len(renamed_files):
+            print(renamed_files_msg)
 
         if paths:
             try:
@@ -244,15 +256,20 @@ class GofileIOUploader:
             else:
                 pprint(responses)
         else:
-            print("No file paths left to upload")
+            print("No file paths left to upload. Were all files already uploaded to the server?")
 
 
 async def async_main() -> None:
     options = cli()
 
-    # This probably works even though it's done twice
-    logging_level = getattr(logging, options["log"].upper())
-    logging.basicConfig(level=logging_level)
+    logging_level = getattr(logging, options["log_level"].upper())
+    handlers = [logging.StreamHandler()]
+    if options["log_file"]:
+        logger.debug(f'Program logs will also be output to {options["log_file"]}')
+        file_logger = logging.FileHandler(options["log_file"], encoding="utf-8", mode="w")
+        handlers.append(file_logger)
+
+    logging.basicConfig(level=logging_level, handlers=handlers, format="%(asctime)s " + logging.BASIC_FORMAT)
 
     logger.debug(pformat(options))
 

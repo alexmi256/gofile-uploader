@@ -24,10 +24,12 @@ def load_config_file(config_file_path: Path) -> GofileUploaderLocalConfigOptions
             try:
                 loaded_config = json.load(config_file)
                 config = {k: v for k, v in loaded_config.items() if v is not None}
-            except Exception:
-                logger.exception(f"Failed to load config file {config_file_path} as a JSON config")
+            except Exception as e:
+                logger.exception(
+                    f"Failed to load config file {config_file_path} as a JSON config", stack_info=True, exc_info=e
+                )
     else:
-        logger.error(f"Could not load config file {config_file_path} because it did not exist")
+        logger.warning(f"Could not load config file {config_file_path} because it did not exist")
     return return_dict_without_none_value_keys(config)
 
 
@@ -43,6 +45,10 @@ def cli() -> GofileUploaderOptions:
         "save": True,
         "debug_save_js_locally": False,
         "rename_existing": True,
+        # These options are not BooleanOptionalAction but I want them to always appear in the cli options dict
+        "log_file": None,
+        "log_level": "info",
+        "timeout": 600,
     }
     parser = argparse.ArgumentParser(prog="gofile-upload", description="Gofile.io Uploader supporting parallel uploads")
     parser.add_argument("file", type=Path, help="File or example_files to look for files in to upload")
@@ -87,6 +93,11 @@ def cli() -> GofileUploaderOptions:
         help=f"Maximum parallel uploads to do at once. (default: {default_cli_options['connections']})",
     )
     parser.add_argument(
+        "--timeout",
+        type=int,
+        help=f"Number of seconds before aiohttp times out. If a single upload exceed this time it will fail. This will depend on internet speed but in best case scenario 5GB requires 300s. (default: {default_cli_options['timeout']})",
+    )
+    parser.add_argument(
         "--public",
         action=argparse.BooleanOptionalAction,
         help=f"Make all files uploaded public. By default they are private and not unsharable. (default: {default_cli_options['public']})",
@@ -109,11 +120,15 @@ def cli() -> GofileUploaderOptions:
         help=f"How many times to retry a failed upload. (default: {default_cli_options['retries']})",
     )
     parser.add_argument(
-        "--log",
+        "--log-level",
         type=str,
         choices=["debug", "info", "warning", "error", "critical"],
-        default="info",
-        help="Log level",
+        help=f"Log level. (default: {default_cli_options['log_level']})",
+    )
+    parser.add_argument(
+        "--log-file",
+        type=Path,
+        help=f"Additional file to log information to. (default: {default_cli_options['log_file']})",
     )
     args = parser.parse_args()
 
