@@ -1,7 +1,8 @@
 from pathlib import Path
+from pprint import pprint
 from uuid import uuid4
 
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 
 from src.gofile_uploader.cli import cli, load_config_file
 from src.gofile_uploader.types import GofileUploaderOptions
@@ -19,7 +20,13 @@ class TestClientCLI:
         assert default_options
 
         response_validator = TypeAdapter(GofileUploaderOptions)
-        response_validator.validate_python(default_options, strict=True, from_attributes=True)
+
+        try:
+            # This is a massive pain to debug because exceptions get cutoff
+            response_validator.validate_python(default_options, strict=True, from_attributes=True)
+        except ValidationError as exc:
+            pprint(repr(exc.errors()))
+            raise exc
 
         assert default_options["config_file_path"] is None
         assert default_options["config_directory"] is None
