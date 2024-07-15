@@ -15,14 +15,14 @@ class TestClientCLI:
         assert len(loaded_config) == 0
 
     def test_cli_defaults(self):
-        args = ["src/gofile_uploader/tests/example_files/file1.txt", "--no-use-config"]
+        args = ["src/gofile_uploader/tests/example_files/file1.txt", "--no-use-config", "--token=123"]
         default_options = cli(args)
         assert default_options
 
         response_validator = TypeAdapter(GofileUploaderOptions)
 
         try:
-            # This is a massive pain to debug because exceptions get cutoff
+            # This is a pain to debug because exception messages get cutoff
             response_validator.validate_python(default_options, strict=True, from_attributes=True)
         except ValidationError as exc:
             pprint(repr(exc.errors()))
