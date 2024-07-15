@@ -20,9 +20,12 @@ Built using `asyncio`, `aiohttp`, and `tqdm`
 ```
 usage: gofile-upload [-h] [-t TOKEN] [-z {na,eu}] [-f FOLDER] [-d]
                      [--debug-save-js-locally | --no-debug-save-js-locally]
-                     [-c CONNECTIONS] [--public | --no-public]
-                     [--save | --no-save] [--use-config | --no-use-config]
-                     [-r RETRIES]
+                     [--rename-existing | --no-rename-existing]
+                     [-c CONNECTIONS] [--timeout TIMEOUT]
+                     [--public | --no-public] [--save | --no-save]
+                     [--use-config | --no-use-config] [-r RETRIES]
+                     [--log-level {debug,info,warning,error,critical}]
+                     [--log-file LOG_FILE]
                      file
 
 Gofile.io Uploader supporting parallel uploads
@@ -45,8 +48,16 @@ optional arguments:
   --debug-save-js-locally, --no-debug-save-js-locally
                         Debug option to save the retrieved js file locally.
                         (default: False)
+  --rename-existing, --no-rename-existing
+                        If a file is already found on the remote server but
+                        the names differ, rename the file to its local name.
+                        (default: True)
   -c CONNECTIONS, --connections CONNECTIONS
                         Maximum parallel uploads to do at once. (default: 6)
+  --timeout TIMEOUT     Number of seconds before aiohttp times out. If a
+                        single upload exceed this time it will fail. This will
+                        depend on internet speed but in best case scenario 5GB
+                        requires 300s. (default: 600)
   --public, --no-public
                         Make all files uploaded public. By default they are
                         private and not unsharable. (default: False)
@@ -58,6 +69,9 @@ optional arguments:
                         True)
   -r RETRIES, --retries RETRIES
                         How many times to retry a failed upload. (default: 3)
+  --log-level {debug,info,warning,error,critical}
+                        Log level. (default: warning)
+  --log-file LOG_FILE   Additional file to log information to. (default: None)
 
 ```
 ## Details
