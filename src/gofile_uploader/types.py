@@ -198,7 +198,7 @@ class GofileUploaderLocalConfigHistory(TypedDict):
 
 class GofileUploaderLocalConfigOptions(TypedDict):
     token: Optional[str]
-    zone: Optional[str]
+    zone: NotRequired[Optional[str]]
     connections: Optional[int]
     public: Optional[bool]
     save: Optional[bool]
@@ -207,11 +207,11 @@ class GofileUploaderLocalConfigOptions(TypedDict):
 
 
 class GofileUploaderOptions(GofileUploaderLocalConfigOptions):
-    dry_run: Optional[str]
+    dry_run: Optional[bool]
     debug_save_js_locally: Optional[bool]
     rename_existing: Optional[bool]
     use_config: Optional[bool]
-    folder: Optional[str]
+    folder: NotRequired[Optional[str]]
     file: Path
     log_level: Literal["debug", "info", "warning", "error", "critical"]
     log_file: Optional[Path]

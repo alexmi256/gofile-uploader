@@ -23,6 +23,10 @@ def load_config_file(config_file_path: Path) -> GofileUploaderLocalConfigOptions
             try:
                 loaded_config = json.load(config_file)
                 config = {k: v for k, v in loaded_config.items() if v is not None}
+
+                # Special stuff to make the linter happy since JSON doesn't support all Python objects
+                if config.get("log_file"):
+                    config["log_file"] = Path(config["log_file"])
             except Exception as e:
                 logger.exception(
                     f"Failed to load config file {config_file_path} as a JSON config", stack_info=True, exc_info=e
@@ -32,7 +36,7 @@ def load_config_file(config_file_path: Path) -> GofileUploaderLocalConfigOptions
     return return_dict_without_none_value_keys(config)
 
 
-def cli() -> GofileUploaderOptions:
+def cli(argparse_arguments: list[str]) -> GofileUploaderOptions:
 
     # These are options that the CLI will default to when they have the BooleanOptionalAction action.
     # We do this because BooleanOptionalAction has 3 states of None/True/False which we need for the None value
@@ -129,7 +133,7 @@ def cli() -> GofileUploaderOptions:
         type=Path,
         help=f"Additional file to log information to. (default: {default_cli_options['log_file']})",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argparse_arguments)
 
     loaded_options = {}
 

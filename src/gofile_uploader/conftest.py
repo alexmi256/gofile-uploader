@@ -8,7 +8,7 @@ import pytest
 import pytest_asyncio
 
 from src.gofile_uploader.api import GofileIOAPI
-from src.gofile_uploader.gofile_uploader import GofileIOUploader
+from src.gofile_uploader.gofile_uploader import GofileIOUploader, cli
 
 BASE_CONFIG = {
     "token": None,
@@ -25,6 +25,9 @@ BASE_CONFIG = {
     "debug_save_js_locally": False,
     "rename_existing": True,
     "use_config": False,
+    "timeout": 600,
+    "log_level": "warning",
+    "log_file": None,
     "folder": None,
     "file": Path("src/gofile_uploader/tests/example_files/file1.txt"),
     "config_file_path": None,

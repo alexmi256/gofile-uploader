@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import re
+import sys
 import time
 from pathlib import Path
 from pprint import pformat, pprint
@@ -259,7 +260,7 @@ class GofileIOUploader:
 
 
 async def async_main() -> None:
-    options = cli()
+    options = cli(sys.argv[1:])
 
     logging_level = getattr(logging, options["log_level"].upper())
     handlers = [logging.StreamHandler()]
