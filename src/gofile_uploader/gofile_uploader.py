@@ -110,7 +110,7 @@ class GofileIOUploader:
                     f'Could not find a folder inside the root folder with the name "{folder}" so we will create one'
                 )
                 new_folder = await self.api.create_folder(self.api.root_folder_id, folder)
-                return new_folder["data"]["folderId"]
+                return new_folder["data"]["id"]
 
     async def cleanup_api_sessions(self):
         await self.api.session.close()

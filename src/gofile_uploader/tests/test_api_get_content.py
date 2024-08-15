@@ -24,10 +24,9 @@ class TestAPIGetContent:
         assert response["data"]["parentFolder"] == api.root_folder_id
         assert response["data"]["type"] == "folder"
         assert response["data"]["public"] is False
-        assert file["fileId"] in response["data"]["children"]
-        assert file["fileId"] in response["data"]["childrenIds"]
-        assert response["data"]["children"][file["fileId"]]["name"] == file["fileName"]
-        assert response["data"]["children"][file["fileId"]]["md5"] == file["md5"]
+        assert file["id"] in response["data"]["children"]
+        assert response["data"]["children"][file["id"]]["name"] == file["name"]
+        assert response["data"]["children"][file["id"]]["md5"] == file["md5"]
 
     @pytest.mark.asyncio(scope="session")
     async def test_get_root_folder_contents(
@@ -49,9 +48,9 @@ class TestAPIGetContent:
         file = file_in_folder
         folder = folder_from_account
 
-        response = await api.get_content(file["fileId"], None, None)
+        response = await api.get_content(file["id"], None, None)
 
         response_validator = TypeAdapter(GetContentResponse)
         response_validator.validate_python(response, strict=True, from_attributes=True)
-        assert response["data"]["parentFolder"] == folder["folderId"]
+        assert response["data"]["parentFolder"] == folder["id"]
         assert response["data"]["type"] == "file"

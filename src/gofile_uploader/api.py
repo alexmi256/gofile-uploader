@@ -167,7 +167,7 @@ class GofileIOAPI:
             response = await resp.json()
             GofileIOAPI.raise_error_if_error_in_remote_response(response)
             logger.debug(
-                f'Folder "{response["data"]["name"]}" ({response["data"]["folderId"]}) created in {response["data"]["parentFolder"]}'
+                f'Folder "{response["data"]["name"]}" ({response["data"]["id"]}) created in {response["data"]["parentFolder"]}'
             )
             self.created_folders[folder_name] = response["data"]
             return response
@@ -177,12 +177,6 @@ class GofileIOAPI:
     ) -> UpdateContentResponse:
         data = {"attribute": option, "attributeValue": value}
         async with self.session.put(f"/contents/{content_id}/update", data=data) as resp:
-            response = await resp.json()
-            GofileIOAPI.raise_error_if_error_in_remote_response(response)
-            return response
-
-    async def delete_content(self, content_id: str) -> UpdateContentResponse:
-        async with self.session.delete(f"/contents/{content_id}") as resp:
             response = await resp.json()
             GofileIOAPI.raise_error_if_error_in_remote_response(response)
             return response

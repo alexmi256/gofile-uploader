@@ -26,7 +26,7 @@ class TestAPIFolder:
         response = await api.create_folder(api.root_folder_id, folder_name)
         response_validator = TypeAdapter(CreateFolderResponse)
         response_validator.validate_python(response, strict=True, from_attributes=True)
-        delete_response = await api.delete_content(response["data"]["folderId"])
+        delete_response = await api.delete_contents([response["data"]["id"]])
 
         response_validator_delete = TypeAdapter(UpdateContentResponse)
         response_validator_delete.validate_python(delete_response, strict=True, from_attributes=True)
