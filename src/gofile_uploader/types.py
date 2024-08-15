@@ -218,6 +218,8 @@ class GofileUploaderLocalConfigOptions(TypedDict):
     save: Optional[bool]
     retries: Optional[int]
     history: GofileUploaderLocalConfigHistory
+    recurse_directories: Optional[bool]
+    recurse_max: Optional[int]
 
 
 class GofileUploaderOptions(GofileUploaderLocalConfigOptions):

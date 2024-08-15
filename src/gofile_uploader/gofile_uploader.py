@@ -167,7 +167,15 @@ class GofileIOUploader:
         if path.is_file():
             paths = [path]
         else:
-            paths = [x for x in path.iterdir()]
+            if self.options.get("recurse_directories"):
+                max_files_before_error = self.options["recurse_max"]
+                paths = [x for x in path.rglob("*") if x.is_file()]
+                if len(paths) > max_files_before_error:
+                    raise Exception(
+                        f'You are about to upload {len(paths)} files which is a lot. Are you sure you want to do this? If yes run again with the "--recurse-max={len(paths)}" flag.'
+                    )
+            else:
+                paths = [x for x in path.iterdir()]
             if folder is None:
                 folder = path.name
         folder_id = await self.get_folder_id(folder)

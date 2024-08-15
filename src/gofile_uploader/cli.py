@@ -52,6 +52,7 @@ def cli(argparse_arguments: list[str]) -> GofileUploaderOptions:
         "log_file": None,
         "log_level": "warning",
         "timeout": 600,
+        "recurse_directories": False,
     }
     parser = argparse.ArgumentParser(prog="gofile-upload", description="Gofile.io Uploader supporting parallel uploads")
     parser.add_argument("file", type=Path, help="File or directory to look for files in to upload")
@@ -115,6 +116,16 @@ def cli(argparse_arguments: list[str]) -> GofileUploaderOptions:
         action=argparse.BooleanOptionalAction,
         default=True,
         help=f"Whether to create and use a config file in $HOME/.config/gofile_upload/config.json.",
+    )
+    parser.add_argument(
+        "--recurse-directories",
+        action=argparse.BooleanOptionalAction,
+        help=f"Whether to recursively iterate all directories and search for files to upload if a directory is given as the upload file",
+    )
+    parser.add_argument(
+        "--recurse-max",
+        default=1000,
+        help=f"Maximum number of files before the program errors out when using --recurse-directory feature. Put here as safety feature.",
     )
     parser.add_argument(
         "-r",
