@@ -24,7 +24,7 @@ class TestAPIFolder:
         api = base_cli_config_api_with_account_initialized
 
         file_path = Path("src/gofile_uploader/tests/example_files/file1.txt")
-        content_id = folder_from_account["folderId"]
+        content_id = folder_from_account["id"]
 
         response = await api.upload_file(file_path, content_id)
         response_validator = TypeAdapter(CompletedFileUploadResult)
@@ -57,7 +57,7 @@ class TestAPIFolder:
 
         folder_name = str(uuid4())
         create_folder_response = await api.create_folder(api.root_folder_id, folder_name)
-        content_id = create_folder_response["data"]["folderId"]
+        content_id = create_folder_response["data"]["id"]
 
         response = await api.upload_files(file_paths, content_id)
         response_validator = TypeAdapter(List[CompletedFileUploadResult])

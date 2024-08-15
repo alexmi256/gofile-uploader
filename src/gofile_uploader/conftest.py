@@ -108,8 +108,8 @@ async def base_cli_config_api_with_account_initialized():
 
     yield api
 
-    root_folder_contents = await api.get_content(api.root_folder_id, None, None)
-    root_folder_items: list[str] = root_folder_contents["data"]["childrenIds"]  # type: ignore
+    root_folder_contents = await api.get_content(api.root_folder_id, False, None)
+    root_folder_items: list[str] = root_folder_contents["data"]["children"].keys()  # type: ignore
     if root_folder_items:
         await api.delete_contents(root_folder_items)
 
@@ -135,7 +135,7 @@ async def file_in_folder(base_cli_config_api_with_account_initialized, folder_fr
     api = base_cli_config_api_with_account_initialized
 
     file_path = Path("src/gofile_uploader/tests/example_files/file1.txt")
-    content_id = folder_from_account["folderId"]
+    content_id = folder_from_account["id"]
 
     file_uploaded = await api.upload_file(file_path, content_id)
     yield file_uploaded
@@ -172,7 +172,7 @@ async def folder_for_initialized_client(initialized_client):
     yield create_folder_response
 
     root_folder_contents = await client.api.get_content(client.api.root_folder_id, None, None)
-    root_folder_items: list[str] = root_folder_contents["data"]["childrenIds"]  # type: ignore
+    root_folder_items: list[str] = root_folder_contents["data"]["children"].keys()  # type: ignore
     if root_folder_items:
         await client.api.delete_contents(root_folder_items)
 
@@ -187,7 +187,7 @@ async def renamed_file_in_folder(folder_for_initialized_client, initialized_clie
     with open(file_path, "x") as file:
         file.write("hello world 1")
 
-    content_id = folder["data"]["folderId"]
+    content_id = folder["data"]["id"]
 
     file_uploaded = await client.api.upload_file(file_path, content_id)
 
@@ -216,14 +216,14 @@ async def client_with_folder_and_file(base_cli_config):
     create_folder_response = await client.api.create_folder(client.api.root_folder_id, folder_name)
     file_path = Path("src/gofile_uploader/tests/example_files/file1.txt")
 
-    file_uploaded = await client.api.upload_file(file_path, create_folder_response["data"]["folderId"])
+    file_uploaded = await client.api.upload_file(file_path, create_folder_response["data"]["id"])
 
     data = {"client": client, "folder": create_folder_response, "file": file_uploaded}
 
     yield data
 
     root_folder_contents = await client.api.get_content(client.api.root_folder_id, None, None)
-    root_folder_items: list[str] = root_folder_contents["data"]["childrenIds"]  # type: ignore
+    root_folder_items: list[str] = root_folder_contents["data"]["children"].keys()  # type: ignore
     if root_folder_items:
         await client.api.delete_contents(root_folder_items)
     await client.cleanup_api_sessions()

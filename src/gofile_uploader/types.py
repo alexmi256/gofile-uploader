@@ -24,12 +24,13 @@ class GetNewAccountResponse(ServerResponse):
 
 
 class CreateFolderData(TypedDict):
-    folderId: str
+    id: str
+    owner: str
     type: str
     name: str
     parentFolder: str
     createTime: int
-    # childs: list[str]
+    modTime: int
     code: str
 
 
@@ -89,6 +90,7 @@ class GetContentChildFile(TypedDict):
     type: Literal["folder", "file"]
     name: str
     createTime: int
+    modTime: int
     size: int
     downloadCount: int
     md5: str
@@ -100,13 +102,18 @@ class GetContentChildFile(TypedDict):
 
 
 class GetContentChildFolder(TypedDict):
+    isOwner: bool
     id: str
     type: Literal["folder", "file"]
     name: str
     code: str
     createTime: int
+    modTime: int
     public: bool
-    childrenIds: list[str]
+    # childrenIds: list[str]
+    totalDownloadCount: int
+    totalSize: int
+    childrenCount: int
 
 
 class GetFolderContentData(TypedDict):
@@ -115,12 +122,13 @@ class GetFolderContentData(TypedDict):
     type: Literal["folder", "file"]
     name: str
     createTime: int
+    modTime: int
     parentFolder: str
     code: str
     public: bool
     totalDownloadCount: int
     totalSize: int
-    childrenIds: list[str]
+    childrenCount: int
     children: dict[str, Union[GetContentChildFile, GetContentChildFolder]]
     # Only for root folder AFAICT
     isRoot: NotRequired[bool]
@@ -148,13 +156,19 @@ UpdateContentOptionValue = Union[str, int]
 
 
 class UploadFileData(TypedDict):
-    # guestToken: str
+    guestToken: str
     downloadPage: str
-    code: str
     parentFolder: str
-    fileId: str
-    fileName: str
+    id: str
+    name: str
     md5: str
+    createTime: int
+    modTime: int
+    mimetype: str
+    parentFolderCode: str
+    servers: list[str]
+    size: int
+    type: str
 
 
 class UploadFileResponse(ServerResponse):

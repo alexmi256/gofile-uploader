@@ -12,7 +12,7 @@ class TestClientUpload:
         folder = folder_for_initialized_client
         file = renamed_file_in_folder
 
-        folder_id = folder["data"]["folderId"]
+        folder_id = folder["data"]["id"]
         assert client.options["rename_existing"]
 
         folder_contents = await client.api.get_content(folder_id, None, None)
