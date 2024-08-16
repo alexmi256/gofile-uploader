@@ -125,6 +125,7 @@ def cli(argparse_arguments: list[str]) -> GofileUploaderOptions:
     parser.add_argument(
         "--recurse-max",
         default=1000,
+        type=int,
         help=f"Maximum number of files before the program errors out when using --recurse-directory feature. Put here as safety feature.",
     )
     parser.add_argument(
