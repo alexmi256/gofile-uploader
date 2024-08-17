@@ -232,8 +232,8 @@ class GofileUploaderOptions(GofileUploaderLocalConfigOptions):
     log_level: Literal["debug", "info", "warning", "error", "critical"]
     log_file: Optional[Path]
     timeout: int
-    exclude_file_types: Optional[str]
-    only_file_types: Optional[str]
+    exclude_file_types: NotRequired[str]
+    only_file_types: NotRequired[str]
     # These options are derived on runtime
     config_file_path: Optional[Path]
     config_directory: Optional[Path]
