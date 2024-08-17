@@ -129,6 +129,16 @@ def cli(argparse_arguments: list[str]) -> GofileUploaderOptions:
         help=f"Maximum number of files before the program errors out when using --recurse-directory feature. Put here as safety feature.",
     )
     parser.add_argument(
+        "--exclude-file-types",
+        type=str,
+        help=f"Exclude files ending with these extensions from being uploaded. Comma separated values. Example: jpg,png",
+    )
+    parser.add_argument(
+        "--only-file-types",
+        type=str,
+        help=f"Only upload files ending with these extensions. Comma separated values. Example: jpg,png",
+    )
+    parser.add_argument(
         "-r",
         "--retries",
         type=int,
