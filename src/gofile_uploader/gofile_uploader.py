@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from pprint import pformat, pprint
 
-from typing_extensions import List, Optional
+from typing_extensions import List, Optional, cast
 
 from .api import GofileIOAPI
 from .cli import cli
@@ -56,6 +56,8 @@ class GofileIOUploader:
                     "log_level": self.options.get("log_level"),
                     "timeout": self.options.get("timeout"),
                     "retries": self.options.get("retries"),
+                    "recurse_directories": self.options.get("recurse_directories"),
+                    "recurse_max": self.options.get("recurse_max"),
                     "history": config_history,
                 }
                 logger.debug(pformat(savable_config))
@@ -87,7 +89,7 @@ class GofileIOUploader:
             # is usually the root folder name
             if root_folder_contents["data"]["name"] == folder:
                 logger.info("The folder we wanted to create ended up being the account root folder")
-                return root_folder_contents["data"]["id"]
+                return cast(str, root_folder_contents["data"]["id"])
 
             # Check in the root folder if there is a example_files with that name already
             # We're only trying this one level deep otherwise we'd have to do recursive stuff I don't care to do atm
@@ -176,6 +178,13 @@ class GofileIOUploader:
                     )
             else:
                 paths = [x for x in path.iterdir()]
+
+            if self.options.get("exclude_file_types"):
+                paths = [x for x in paths if x.suffix[1:] not in self.options.get("exclude_file_types").split(",")]
+
+            if self.options.get("only_file_types"):
+                paths = [x for x in paths if x.suffix[1:] in self.options.get("only_file_types").split(",")]
+
             if folder is None:
                 folder = path.name
         folder_id = await self.get_folder_id(folder)
