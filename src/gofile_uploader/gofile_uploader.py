@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 from pprint import pformat, pprint
 
+from tqdm import tqdm
 from typing_extensions import List, Optional, cast
 
 from .api import GofileIOAPI
@@ -134,7 +135,8 @@ class GofileIOUploader:
         sums = {}
 
         # TODO: Try to parallelize this
-        for path in paths:
+        disable_hashing_progress = True if len(paths) < 50 else False
+        for path in tqdm(paths, desc="Hashes Calculated", disable=disable_hashing_progress):
             if path.is_file():
                 if str(path) in self.options["history"]["md5_sums"]:
                     md5_sum_for_file = self.options["history"]["md5_sums"][str(path)]
