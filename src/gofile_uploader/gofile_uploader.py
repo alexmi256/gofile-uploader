@@ -180,10 +180,10 @@ class GofileIOUploader:
                 paths = [x for x in path.iterdir()]
 
             if self.options.get("exclude_file_types"):
-                paths = [x for x in paths if x.suffix not in self.options.get("exclude_file_types").split(",")]
+                paths = [x for x in paths if x.suffix[1:] not in self.options.get("exclude_file_types").split(",")]
 
             if self.options.get("only_file_types"):
-                paths = [x for x in paths if x.suffix in self.options.get("only_file_types").split(",")]
+                paths = [x for x in paths if x.suffix[1:] in self.options.get("only_file_types").split(",")]
 
             if folder is None:
                 folder = path.name
