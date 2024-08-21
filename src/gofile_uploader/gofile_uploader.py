@@ -6,6 +6,7 @@ import logging
 import re
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from pprint import pformat, pprint
 
@@ -131,23 +132,38 @@ class GofileIOUploader:
             for row in responses:
                 csv_writer.writerow(row)
 
+    def calculate_md5sum_or_retrieve_cached(self, path: Path):
+        if str(path) in self.options["history"]["md5_sums"]:
+            md5_sum_for_file = self.options["history"]["md5_sums"][str(path)]
+            logger.debug(
+                f'Found precomputed md5sum ({md5_sum_for_file}) for path "{path}" using md5_sums config history'
+            )
+            return md5_sum_for_file
+        # TODO: Also check the previously uploaded file responses for MD5s of the same path
+        else:
+            logger.debug(f"Computing new md5sum for file {path}")
+            return GofileIOUploader.checksum(path)
+
     def get_md5_sums_for_files(self, paths: List[Path]) -> dict[str, str]:
         sums = {}
 
-        # TODO: Try to parallelize this
-        disable_hashing_progress = True if len(paths) < 50 else False
-        for path in tqdm(paths, desc="Hashes Calculated", disable=disable_hashing_progress):
-            if path.is_file():
-                if str(path) in self.options["history"]["md5_sums"]:
-                    md5_sum_for_file = self.options["history"]["md5_sums"][str(path)]
-                    logger.debug(
-                        f'Found precomputed md5sum ({md5_sum_for_file}) for path "{path}" using md5_sums config history'
-                    )
-                    sums[str(path)] = md5_sum_for_file
-                # TODO: Also check the previously uploaded file responses for MD5s of the same path
-                else:
-                    logger.debug(f"Computing new md5sum for file {path}")
-                    sums[str(path)] = GofileIOUploader.checksum(path)
+        paths_of_files = [x for x in paths if x.is_file()]
+
+        disable_hashing_progress = True if len(paths_of_files) < 50 else False
+
+        number_of_files = len(paths_of_files)
+
+        with tqdm(
+            total=number_of_files, desc="Hashes Calculated", disable=disable_hashing_progress
+        ) as files_hashed_progress:
+            with ProcessPoolExecutor(max_workers=5) as executor:
+                futures = {
+                    executor.submit(self.calculate_md5sum_or_retrieve_cached, arg): arg for arg in paths_of_files
+                }
+                for future in as_completed(futures):
+                    arg = futures[future]
+                    sums[str(arg)] = future.result()
+                    files_hashed_progress.update(1)
 
         # Save md5sums to local config cache so we don't have to recompute later
         self.options["history"]["md5_sums"].update(sums)

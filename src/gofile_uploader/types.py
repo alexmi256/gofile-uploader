@@ -220,6 +220,7 @@ class GofileUploaderLocalConfigOptions(TypedDict):
     history: GofileUploaderLocalConfigHistory
     recurse_directories: Optional[bool]
     recurse_max: Optional[int]
+    hash_pool_size: Optional[int]
 
 
 class GofileUploaderOptions(GofileUploaderLocalConfigOptions):
