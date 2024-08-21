@@ -132,22 +132,10 @@ class GofileIOUploader:
             for row in responses:
                 csv_writer.writerow(row)
 
-    def calculate_md5sum_or_retrieve_cached(self, path: Path):
-        if str(path) in self.options["history"]["md5_sums"]:
-            md5_sum_for_file = self.options["history"]["md5_sums"][str(path)]
-            logger.debug(
-                f'Found precomputed md5sum ({md5_sum_for_file}) for path "{path}" using md5_sums config history'
-            )
-            return md5_sum_for_file
-        # TODO: Also check the previously uploaded file responses for MD5s of the same path
-        else:
-            logger.debug(f"Computing new md5sum for file {path}")
-            return GofileIOUploader.checksum(path)
-
     def get_md5_sums_for_files(self, paths: List[Path]) -> dict[str, str]:
-        sums = {}
-
         paths_of_files = [x for x in paths if x.is_file()]
+
+        sums = {}
 
         disable_hashing_progress = True if len(paths_of_files) < 50 else False
 
@@ -156,10 +144,8 @@ class GofileIOUploader:
         with tqdm(
             total=number_of_files, desc="Hashes Calculated", disable=disable_hashing_progress
         ) as files_hashed_progress:
-            with ProcessPoolExecutor(max_workers=5) as executor:
-                futures = {
-                    executor.submit(self.calculate_md5sum_or_retrieve_cached, arg): arg for arg in paths_of_files
-                }
+            with ProcessPoolExecutor(max_workers=self.options["hash_pool_size"]) as executor:
+                futures = {executor.submit(GofileIOUploader.checksum, arg): arg for arg in paths_of_files}
                 for future in as_completed(futures):
                     arg = futures[future]
                     sums[str(arg)] = future.result()
@@ -170,7 +156,7 @@ class GofileIOUploader:
         # Update the current configs since we could have calculated md5 sums
         self.save_config_file()
 
-        return sums
+        return {str(path): self.options["history"]["md5_sums"][str(path)] for path in paths_of_files}
 
     @staticmethod
     def checksum(filename: Path, hash_factory=hashlib.md5, chunk_num_blocks: int = 128):
