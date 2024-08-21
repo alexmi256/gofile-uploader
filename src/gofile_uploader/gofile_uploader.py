@@ -266,6 +266,7 @@ class GofileIOUploader:
                         try:
                             await self.api.update_content(content_to_rename["id"], "name", existing_file_name)
                             logger.info(f'Renamed {content_to_rename["name"]} to {existing_file_name}')
+                            time.sleep(0.5)
                         except Exception as e:
                             msg = f'Failed to rename file from {content_to_rename["name"]} (server) to {existing_file_name} (local)'
                             logger.exception(msg, exc_info=e, stack_info=True)
