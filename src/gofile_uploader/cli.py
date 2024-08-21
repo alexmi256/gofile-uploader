@@ -53,7 +53,7 @@ def cli(argparse_arguments: list[str]) -> GofileUploaderOptions:
         "log_level": "warning",
         "timeout": 600,
         "recurse_directories": False,
-        "hash_pool_size": 4,
+        "hash_pool_size": max(os.cpu_count() - 2, 1),
     }
     parser = argparse.ArgumentParser(prog="gofile-upload", description="Gofile.io Uploader supporting parallel uploads")
     parser.add_argument("file", type=Path, help="File or directory to look for files in to upload")
