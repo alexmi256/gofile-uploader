@@ -114,7 +114,9 @@ class GofileIOUploader:
                     f'Could not find a folder inside the root folder with the name "{folder}" so we will create one'
                 )
                 if self.options["dry_run"]:
-                    print(f"Dry run only, skipping folder creation of '{folder}' and using root folder")
+                    print(
+                        f"Dry run only, skipping folder creation of '{folder}' and using root folder '{self.api.root_folder_id}'"
+                    )
                     return self.api.root_folder_id
                 else:
                     new_folder = await self.api.create_folder(self.api.root_folder_id, folder)
@@ -228,7 +230,7 @@ class GofileIOUploader:
                 else:
                     await self.api.update_content(folder_id, "public", "true")
 
-            skipped_files_msg = f'{len(paths_to_skip)}/{len(paths)} files will be skipped since they were already uploaded to the folder "{folder}"'
+            skipped_files_msg = f'{len(paths_to_skip)}/{len(paths)} files will be skipped since they were already uploaded to the folder "{folder}" ({folder_id})'
 
             logger.info(skipped_files_msg)
 
