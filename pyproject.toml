@@ -29,7 +29,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "GofileIOUploader"
-version = "0.12.6.dev7"
+version = "0.12.6.dev8"
 description = "Gofile.io uploader supporting parallel uploads"
 readme = "README.md"
 requires-python = ">=3.9"
