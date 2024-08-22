@@ -147,7 +147,10 @@ class GofileIOUploader:
 
         number_of_files = len(paths_of_files)
 
-        logger.info(f"Calculating hashes for {number_of_files}/{len(paths)} files")
+        if number_of_files:
+            logger.info(f"Calculating hashes for {number_of_files}/{len(paths)} files")
+        else:
+            logger.info(f"All {len(paths)} files were previously hashed")
 
         with tqdm(
             total=number_of_files, desc="Hashes Calculated", disable=disable_hashing_progress
@@ -164,7 +167,7 @@ class GofileIOUploader:
         # Update the current configs since we could have calculated md5 sums
         self.save_config_file()
 
-        return {str(path): self.options["history"]["md5_sums"][str(path)] for path in paths_of_files}
+        return {str(path): self.options["history"]["md5_sums"][str(path)] for path in paths}
 
     @staticmethod
     def checksum(filename: Path, hash_factory=hashlib.md5, chunk_num_blocks: int = 128):
