@@ -6,9 +6,11 @@ import logging
 import re
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from pprint import pformat, pprint
 
+from tqdm import tqdm
 from typing_extensions import List, Optional, cast
 
 from .api import GofileIOAPI
@@ -111,8 +113,14 @@ class GofileIOUploader:
                 logger.info(
                     f'Could not find a folder inside the root folder with the name "{folder}" so we will create one'
                 )
-                new_folder = await self.api.create_folder(self.api.root_folder_id, folder)
-                return new_folder["data"]["id"]
+                if self.options["dry_run"]:
+                    print(
+                        f"Dry run only, skipping folder creation of '{folder}' and using root folder '{self.api.root_folder_id}'"
+                    )
+                    return self.api.root_folder_id
+                else:
+                    new_folder = await self.api.create_folder(self.api.root_folder_id, folder)
+                    return new_folder["data"]["id"]
 
     async def cleanup_api_sessions(self):
         await self.api.session.close()
@@ -131,28 +139,35 @@ class GofileIOUploader:
                 csv_writer.writerow(row)
 
     def get_md5_sums_for_files(self, paths: List[Path]) -> dict[str, str]:
+        paths_of_files = [x for x in paths if x.is_file() and str(x) not in self.options["history"]["md5_sums"]]
+
         sums = {}
 
-        # TODO: Try to parallelize this
-        for path in paths:
-            if path.is_file():
-                if str(path) in self.options["history"]["md5_sums"]:
-                    md5_sum_for_file = self.options["history"]["md5_sums"][str(path)]
-                    logger.debug(
-                        f'Found precomputed md5sum ({md5_sum_for_file}) for path "{path}" using md5_sums config history'
-                    )
-                    sums[str(path)] = md5_sum_for_file
-                # TODO: Also check the previously uploaded file responses for MD5s of the same path
-                else:
-                    logger.debug(f"Computing new md5sum for file {path}")
-                    sums[str(path)] = GofileIOUploader.checksum(path)
+        disable_hashing_progress = True if len(paths_of_files) < 50 else False
+
+        number_of_files = len(paths_of_files)
+
+        if number_of_files:
+            logger.info(f"Calculating hashes for {number_of_files}/{len(paths)} files")
+        else:
+            logger.info(f"All {len(paths)} files were previously hashed")
+
+        with tqdm(
+            total=number_of_files, desc="Hashes Calculated", disable=disable_hashing_progress
+        ) as files_hashed_progress:
+            with ProcessPoolExecutor(max_workers=self.options["hash_pool_size"]) as executor:
+                futures = {executor.submit(GofileIOUploader.checksum, arg): arg for arg in paths_of_files}
+                for future in as_completed(futures):
+                    arg = futures[future]
+                    sums[str(arg)] = future.result()
+                    files_hashed_progress.update(1)
 
         # Save md5sums to local config cache so we don't have to recompute later
         self.options["history"]["md5_sums"].update(sums)
         # Update the current configs since we could have calculated md5 sums
         self.save_config_file()
 
-        return sums
+        return {str(path): self.options["history"]["md5_sums"][str(path)] for path in paths}
 
     @staticmethod
     def checksum(filename: Path, hash_factory=hashlib.md5, chunk_num_blocks: int = 128):
@@ -213,9 +228,12 @@ class GofileIOUploader:
                 and not folder_id_contents["data"]["public"]
             ):
                 logger.info(f"Making folder {folder_id} public")
-                await self.api.update_content(folder_id, "public", "true")
+                if self.options["dry_run"]:
+                    print(f"Dry run only, folder {folder_id} will not be made public")
+                else:
+                    await self.api.update_content(folder_id, "public", "true")
 
-            skipped_files_msg = f'{len(paths_to_skip)}/{len(paths)} files will be skipped since they were already uploaded to the folder "{folder}"'
+            skipped_files_msg = f'{len(paths_to_skip)}/{len(paths)} files will be skipped since they were already uploaded to the folder "{folder}" ({folder_id})'
 
             logger.info(skipped_files_msg)
 
@@ -243,16 +261,22 @@ class GofileIOUploader:
                             f"File {existing_file} matched against md5 {existing_file_md5} on the server but with different name. Will renamed."
                         )
 
-                    for content_to_rename in matching_remote_files_to_rename:
-                        logger.info(f'Renaming {content_to_rename["name"]} (server) to {existing_file_name} (local)')
-                        try:
-                            await self.api.update_content(content_to_rename["id"], "name", existing_file_name)
-                            logger.info(f'Renamed {content_to_rename["name"]} to {existing_file_name}')
-                        except Exception as e:
-                            msg = f'Failed to rename file from {content_to_rename["name"]} (server) to {existing_file_name} (local)'
-                            logger.exception(msg, exc_info=e, stack_info=True)
+                    if self.options["dry_run"]:
+                        print(f"Dry run only, file renaming will be skipped")
+                    else:
+                        for content_to_rename in matching_remote_files_to_rename:
+                            logger.info(
+                                f'Renaming {content_to_rename["name"]} (server) to {existing_file_name} (local)'
+                            )
+                            try:
+                                await self.api.update_content(content_to_rename["id"], "name", existing_file_name)
+                                logger.info(f'Renamed {content_to_rename["name"]} to {existing_file_name}')
+                                time.sleep(0.5)
+                            except Exception as e:
+                                msg = f'Failed to rename file from {content_to_rename["name"]} (server) to {existing_file_name} (local)'
+                                logger.exception(msg, exc_info=e, stack_info=True)
 
-                        renamed_files.append(content_to_rename)
+                            renamed_files.append(content_to_rename)
 
         renamed_files_msg = f"Renamed {len(renamed_files)}/{len(paths_to_skip)} skipped files"
 
@@ -263,7 +287,11 @@ class GofileIOUploader:
 
         if paths:
             try:
-                responses = await self.api.upload_files(paths, folder_id)
+                if self.options["dry_run"]:
+                    print(f"Dry run only, files will not be uploaded")
+                    responses = []
+                else:
+                    responses = await self.api.upload_files(paths, folder_id)
             finally:
                 # FIXME: Should session management even be done here, probably not?
                 await self.cleanup_api_sessions()
@@ -294,10 +322,7 @@ async def async_main() -> None:
 
     try:
         await gofile_client.api.init()
-        if options["dry_run"]:
-            print("Dry run only, uploading skipped")
-        else:
-            await gofile_client.upload_files(options["file"], options.get("folder"))
+        await gofile_client.upload_files(options["file"], options.get("folder"))
     finally:
         await gofile_client.cleanup_api_sessions()
         gofile_client.save_config_file()

@@ -30,6 +30,7 @@ BASE_CONFIG = {
     "log_file": None,
     "folder": None,
     "file": Path("src/gofile_uploader/tests/example_files/file1.txt"),
+    "hash_pool_size": 1,
     "config_file_path": None,
     "config_directory": None,
 }

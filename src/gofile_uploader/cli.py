@@ -53,6 +53,7 @@ def cli(argparse_arguments: list[str]) -> GofileUploaderOptions:
         "log_level": "warning",
         "timeout": 600,
         "recurse_directories": False,
+        "hash_pool_size": max(os.cpu_count() - 2, 1),
     }
     parser = argparse.ArgumentParser(prog="gofile-upload", description="Gofile.io Uploader supporting parallel uploads")
     parser.add_argument("file", type=Path, help="File or directory to look for files in to upload")
@@ -143,6 +144,11 @@ def cli(argparse_arguments: list[str]) -> GofileUploaderOptions:
         "--retries",
         type=int,
         help=f"How many times to retry a failed upload. (default: {default_cli_options['retries']})",
+    )
+    parser.add_argument(
+        "--hash-pool-size",
+        type=int,
+        help=f"How many md5 hashes to calculate in parallel. (default: {default_cli_options['hash_pool_size']})",
     )
     parser.add_argument(
         "--log-level",

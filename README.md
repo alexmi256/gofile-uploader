@@ -23,7 +23,12 @@ usage: gofile-upload [-h] [-t TOKEN] [-z {na,eu}] [-f FOLDER] [-d]
                      [--rename-existing | --no-rename-existing]
                      [-c CONNECTIONS] [--timeout TIMEOUT]
                      [--public | --no-public] [--save | --no-save]
-                     [--use-config | --no-use-config] [-r RETRIES]
+                     [--use-config | --no-use-config]
+                     [--recurse-directories | --no-recurse-directories]
+                     [--recurse-max RECURSE_MAX]
+                     [--exclude-file-types EXCLUDE_FILE_TYPES]
+                     [--only-file-types ONLY_FILE_TYPES] [-r RETRIES]
+                     [--hash-pool-size HASH_POOL_SIZE]
                      [--log-level {debug,info,warning,error,critical}]
                      [--log-file LOG_FILE]
                      file
@@ -67,8 +72,25 @@ optional arguments:
                         Whether to create and use a config file in
                         $HOME/.config/gofile_upload/config.json. (default:
                         True)
+  --recurse-directories, --no-recurse-directories
+                        Whether to recursively iterate all directories and
+                        search for files to upload if a directory is given as
+                        the upload file
+  --recurse-max RECURSE_MAX
+                        Maximum number of files before the program errors out
+                        when using --recurse-directory feature. Put here as
+                        safety feature.
+  --exclude-file-types EXCLUDE_FILE_TYPES
+                        Exclude files ending with these extensions from being
+                        uploaded. Comma separated values. Example: jpg,png
+  --only-file-types ONLY_FILE_TYPES
+                        Only upload files ending with these extensions. Comma
+                        separated values. Example: jpg,png
   -r RETRIES, --retries RETRIES
                         How many times to retry a failed upload. (default: 3)
+  --hash-pool-size HASH_POOL_SIZE
+                        How many md5 hashes to calculate in parallel.
+                        (default: 4)
   --log-level {debug,info,warning,error,critical}
                         Log level. (default: warning)
   --log-file LOG_FILE   Additional file to log information to. (default: None)

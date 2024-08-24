@@ -34,7 +34,9 @@ class GofileIOAPI:
         self.session_headers = (
             {"Authorization": f"Bearer {self.options['token']}"} if self.options.get("token") else None
         )
-        self.session = aiohttp.ClientSession("https://api.gofile.io", headers=self.session_headers)
+        self.session = aiohttp.ClientSession(
+            "https://api.gofile.io", headers=self.session_headers, raise_for_status=True
+        )
         # These are set once the account is queried
         self.root_folder_id = None
         self.account_id = None
@@ -56,7 +58,9 @@ class GofileIOAPI:
             if not self.session.closed:
                 await self.session.close()
             self.session_headers = {"Authorization": f"Bearer {self.options['token']}"}
-            self.session = aiohttp.ClientSession("https://api.gofile.io", headers=self.session_headers)
+            self.session = aiohttp.ClientSession(
+                "https://api.gofile.io", headers=self.session_headers, raise_for_status=True
+            )
 
         # Use the account provided by the token
         else:
@@ -72,18 +76,21 @@ class GofileIOAPI:
 
     @staticmethod
     async def get_new_account() -> GetNewAccountResponse:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(raise_for_status=True) as session:
             async with session.post("https://api.gofile.io/accounts") as resp:
                 response = await resp.json()
-                GofileIOAPI.raise_error_if_error_in_remote_response(response)
+                GofileIOAPI.raise_error_if_error_in_remote_response(response, exit_if_rate_limited=True)
                 return response
 
     @staticmethod
-    def raise_error_if_error_in_remote_response(response):
-        if response and ("error" in response.get("status", "") or response.get("status", "") != "ok"):
-            msg = f"Failed getting response from server:\n{pformat(response)}"
-            logger.error(msg)
-            raise Exception(msg)
+    def raise_error_if_error_in_remote_response(response, exit_if_rate_limited=False):
+        if response:
+            if exit_if_rate_limited and ("error-rateLimit" in response.get("status", "")):
+                exit(1)
+            if "error" in response.get("status", "") or response.get("status", "") != "ok":
+                msg = f"Failed getting response from server:\n{pformat(response)}"
+                logger.error(msg)
+                raise Exception(msg)
 
     def raise_error_if_not_premium_status(self):
         if self.is_premium is False:
@@ -116,19 +123,20 @@ class GofileIOAPI:
         params = {"zone": zone} if zone else None
         async with self.session.get("/servers", params=params) as resp:
             response = await resp.json()
-            GofileIOAPI.raise_error_if_error_in_remote_response(response)
+            GofileIOAPI.raise_error_if_error_in_remote_response(response, exit_if_rate_limited=True)
             return response
 
     async def get_account_id(self) -> GetAccountIdResponse:
         async with self.session.get("/accounts/getid") as resp:
             response = await resp.json()
-            GofileIOAPI.raise_error_if_error_in_remote_response(response)
+            GofileIOAPI.raise_error_if_error_in_remote_response(response, exit_if_rate_limited=True)
             logger.debug(f'Account id is "{response["data"]["id"]}"')
             return response
 
     async def get_account_details(self, account_id: str) -> GetAccountDetailsResponse:
         async with self.session.get(f"/accounts/{account_id}") as resp:
             response = await resp.json()
+            GofileIOAPI.raise_error_if_error_in_remote_response(response, exit_if_rate_limited=True)
             logger.debug(f'Account details for "{account_id}" are {response["data"]}')
             return response
 
@@ -155,6 +163,7 @@ class GofileIOAPI:
 
         async with self.session.get(f"/contents/{content_id}", params=params) as resp:
             response = await resp.json()
+            GofileIOAPI.raise_error_if_error_in_remote_response(response, exit_if_rate_limited=True)
             return response
 
     async def create_folder(self, parent_folder_id: str, folder_name: Optional[str]) -> CreateFolderResponse:
@@ -165,7 +174,7 @@ class GofileIOAPI:
         logger.debug(f"Creating new folder '{folder_name}' in parent folder id '{parent_folder_id}' ")
         async with self.session.post("/contents/createfolder", data=data) as resp:
             response = await resp.json()
-            GofileIOAPI.raise_error_if_error_in_remote_response(response)
+            GofileIOAPI.raise_error_if_error_in_remote_response(response, exit_if_rate_limited=True)
             logger.debug(
                 f'Folder "{response["data"]["name"]}" ({response["data"]["id"]}) created in {response["data"]["parentFolder"]}'
             )
@@ -240,7 +249,9 @@ class GofileIOAPI:
 
                             async with session.post("/contents/uploadfile", data=data) as resp:
                                 response = await resp.json()
-                                GofileIOAPI.raise_error_if_error_in_remote_response(response)
+                                GofileIOAPI.raise_error_if_error_in_remote_response(
+                                    response, exit_if_rate_limited=False
+                                )
 
                                 file_metadata.update(response["data"])
                                 file_metadata["uploadSuccess"] = response.get("status")
