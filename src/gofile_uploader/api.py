@@ -100,23 +100,25 @@ class GofileIOAPI:
         # Maybe one day I'll figure out what this stands for
         wt = None
         async with aiohttp.ClientSession() as session:
-            async with session.get("https://gofile.io/dist/js/alljs.js") as resp:
+            async with session.get("https://gofile.io/dist/js/global.js") as resp:
                 response = await resp.text()
                 if self.options.get("debug_save_js_locally"):
                     response_hash = hashlib.md5(response.encode("utf-8")).hexdigest()
-                    file_name = Path(f"gofile-alljs-{response_hash}.js")
+                    file_name = Path(f"gofile-globaljs-{response_hash}.js")
                     if file_name.exists():
                         logger.debug(f"Gofile script {file_name} was retrieved but already existed locally")
                     else:
                         with open(file_name, "w") as file:
                             file.write(response)
                             logger.debug(f"Gofile script {file_name} was retrieved and saved locally")
-                wt_search = re.search(r"wt:\s*\"(\w{12})\"", response)
+                wt_search = re.search(r"\.wt\s*=\s*\"(?P<whitelist_token>\w{12})\"", response)
                 if wt_search:
-                    wt = wt_search.groups()[0]
+                    wt = wt_search.groupdict().get("whitelist_token")
                     logger.debug(f"Gofile wt was successfully extracted as {wt}")
                 else:
-                    logger.error(f"Failed to fetch gofile wt")
+                    logger.error(
+                        f"⚠️💀⚠️💀⚠️💀Failed to fetch gofile whitelist token (wt), many functions are likely to FAIL!"
+                    )
         return wt
 
     async def get_servers(self, zone: Optional[Literal["eu", "na"]]) -> GetServersResponse:
@@ -137,7 +139,7 @@ class GofileIOAPI:
         async with self.session.get(f"/accounts/{account_id}") as resp:
             response = await resp.json()
             GofileIOAPI.raise_error_if_error_in_remote_response(response, exit_if_rate_limited=True)
-            logger.debug(f'Account details for "{account_id}" are {response["data"]}')
+            logger.debug(f'Account details for "{account_id}" are:\n{pformat(response["data"])}')
             return response
 
     async def set_premium_status(self) -> None:
