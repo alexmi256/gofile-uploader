@@ -13,12 +13,11 @@ class TestAPIServers:
         response_validator.validate_python(response, strict=True)
 
     @pytest.mark.asyncio(scope="session")
-    @pytest.mark.skip(reason="The test makes sense but the code does not work like this")
     async def test_get_servers_na(self, base_cli_config_api):
         api = base_cli_config_api
         region = "na"
         response = await api.get_servers(region)
         response_validator = TypeAdapter(GetServersResponse)
         response_validator.validate_python(response, strict=True)
-        servers_with_undesired_regions = [x["zone"] for x in response["data"]["servers"]]
+        servers_with_undesired_regions = [x["zone"] for x in response["data"]["servers"] if x["zone"] != region]
         assert servers_with_undesired_regions == []
