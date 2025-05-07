@@ -7,6 +7,7 @@ import re
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from datetime import datetime
 from pathlib import Path
 from pprint import pformat, pprint
 
@@ -128,8 +129,10 @@ class GofileIOUploader:
             await server_session.close()
         self.api.server_sessions.clear()
 
-    def save_responses_to_csv(self, responses: List[CompletedFileUploadResult]):
-        file_name = f"gofile_upload_{int(time.time())}.csv"
+    @staticmethod
+    def save_responses_to_csv(responses: List[CompletedFileUploadResult]):
+        created_time = datetime.now().isoformat()
+        file_name = f"gofile_upload_{created_time.replace(':','.')}.csv"
         with open(file_name, "w", newline="") as csvfile:
             logger.info(f"Saving uploaded files to {file_name}")
             field_names = list(set().union(*[x.keys() for x in responses if x]))
