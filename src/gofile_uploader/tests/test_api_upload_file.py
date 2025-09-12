@@ -15,6 +15,10 @@ class TestAPIFolder:
 
         file_path = Path("src/gofile_uploader/tests/example_files/file1.txt")
 
+        response = await api.upload_file(file_path)
+        response_validator = TypeAdapter(CompletedFileUploadResult)
+        response_validator.validate_python(response, strict=True, from_attributes=True)
+
     @pytest.mark.asyncio(scope="session")
     async def test_upload_utf8_filename_file(self, base_cli_config_api_with_account_initialized):
         api = base_cli_config_api_with_account_initialized
