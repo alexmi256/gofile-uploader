@@ -264,8 +264,17 @@ class GofileIOAPI:
                     # Maybe someone can try and get better results
                     with TqdmUpTo(unit="B", unit_scale=True, unit_divisor=1024, miniters=1, desc=file_path.name) as t:
                         with ProgressFileReader(filename=file_path, read_callback=t.update_to) as upload_file:
+                            # FIXME: I cannot figure out this Unicode BS
+                            # Via browser uploading non-ascii chars works just fine and the file name does not appear to
+                            # be encoded in anything special.
+                            # If I copy the request as cURL I see that file name will be encoded like "\u7f8e\u306e"
+                            # When I ran the cURL this uploaded just fine and the response I got back was 美」which is correct
+                            # I tried `FormData(charset=utf-8|ascii)` as well using `file_path.name.encode('unicode_escape').decode('ascii')`
+                            # and none of this worked.
+                            # At this time I am out of ideas for a proper fix.
                             data = aiohttp.FormData()
-                            data.add_field("file", upload_file, filename=file_path.name)
+                            formatted_file_name = file_path.name
+                            data.add_field("file", upload_file, filename=formatted_file_name)
                             logger.debug(f'File "{file_path.name}" was selected for upload')
                             if folder_id:
                                 logger.debug(f'File {file_path.name} will be uploaded to folder id "{folder_id}"')
