@@ -87,7 +87,7 @@ class GofileIOAPI:
         if response:
             if exit_if_rate_limited and ("error-rateLimit" in response.get("status", "")):
                 exit(1)
-            if "error" in response.get("status", "") or response.get("status", "") != "ok":
+            if "error" in response.get("status", "") or response.get("status", "") not in ["ok", "noServer"]:
                 msg = f"Failed getting response from server:\n{pformat(response)}"
                 logger.error(msg)
                 raise Exception(msg)
@@ -219,20 +219,46 @@ class GofileIOAPI:
             while retries < self.options["retries"]:
                 try:
                     # TODO: Rate limit to one request every 10 seconds
-                    servers = await self.get_servers(zone=self.options.get("zone"))
+                    # If the user does not specify a server region then we MAY receive an empty "servers" list
+                    # (but I've also seen this not happen) and also a 'server: "noServer"' response back.
+                    # In this case I believe we should rely on the servers provided in the serversAllZone list
+                    upload_server_options = self.options.get("zone")
+                    key_name_for_servers_list = "servers"
+                    servers = await self.get_servers(zone=upload_server_options)
 
-                    server = next(iter(servers["data"]["servers"]))["name"]
-                    if server not in self.server_sessions:
-                        logger.info(f"Using new server connection to {server}")
+                    if servers.get("status") == "noServer":
+                        if upload_server_options is None:
+                            # Get a random server from the ServersAllZone
+                            key_name_for_servers_list = "serversAllZone"
+                        else:
+                            # TODO: Allow failing uploads if undesired server region was not found
+                            key_name_for_servers_list = "serversAllZone"
+                            logger.warning(
+                                f"Could not find server from specified region: {upload_server_options}."
+                                f"A random server from a random region will be used instead."
+                                f"A future option will allow failing if the specified server region was unattainable"
+                            )
+
+                    server = next(iter(servers.get("data", {}).get(key_name_for_servers_list, [])), None)
+                    if not server:
+                        logger.error(
+                            f"No upload servers were found!\nRequested: {upload_server_options}\nReceived {servers}"
+                        )
+                    server_name = server.get("name")
+                    if not server_name:
+                        logger.warning("Failed to get an upload server name")
+
+                    if server_name not in self.server_sessions:
+                        logger.info(f"Using new server connection to {server_name}")
                         timeout = aiohttp.ClientTimeout(total=self.options["timeout"])
-                        self.server_sessions[server] = aiohttp.ClientSession(
-                            f"https://{server}.gofile.io",
+                        self.server_sessions[server_name] = aiohttp.ClientSession(
+                            f"https://{server_name}.gofile.io",
                             headers=self.session_headers,
                             raise_for_status=True,
                             timeout=timeout,
                         )
 
-                    session = self.server_sessions[server]
+                    session = self.server_sessions[server_name]
 
                     # I couldn't get CallbackIOWrapper to work due to "Can not serialize value type: <class 'tqdm.utils.CallbackIOWrapper'>"
                     # Maybe someone can try and get better results
