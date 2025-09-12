@@ -87,7 +87,7 @@ class GofileIOAPI:
         if response:
             if exit_if_rate_limited and ("error-rateLimit" in response.get("status", "")):
                 exit(1)
-            if "error" in response.get("status", "") or response.get("status", "") != "ok":
+            if "error" in response.get("status", "") or response.get("status", "") not in ["ok", "noServer"]:
                 msg = f"Failed getting response from server:\n{pformat(response)}"
                 logger.error(msg)
                 raise Exception(msg)
@@ -219,27 +219,62 @@ class GofileIOAPI:
             while retries < self.options["retries"]:
                 try:
                     # TODO: Rate limit to one request every 10 seconds
-                    servers = await self.get_servers(zone=self.options.get("zone"))
+                    # If the user does not specify a server region then we MAY receive an empty "servers" list
+                    # (but I've also seen this not happen) and also a 'server: "noServer"' response back.
+                    # In this case I believe we should rely on the servers provided in the serversAllZone list
+                    upload_server_options = self.options.get("zone")
+                    key_name_for_servers_list = "servers"
+                    servers = await self.get_servers(zone=upload_server_options)
 
-                    server = next(iter(servers["data"]["servers"]))["name"]
-                    if server not in self.server_sessions:
-                        logger.info(f"Using new server connection to {server}")
+                    if servers.get("status") == "noServer":
+                        if upload_server_options is None:
+                            # Get a random server from the ServersAllZone
+                            key_name_for_servers_list = "serversAllZone"
+                        else:
+                            # TODO: Allow failing uploads if undesired server region was not found
+                            key_name_for_servers_list = "serversAllZone"
+                            logger.warning(
+                                f"Could not find server from specified region: {upload_server_options}."
+                                f"A random server from a random region will be used instead."
+                                f"A future option will allow failing if the specified server region was unattainable"
+                            )
+
+                    server = next(iter(servers.get("data", {}).get(key_name_for_servers_list, [])), None)
+                    if not server:
+                        logger.error(
+                            f"No upload servers were found!\nRequested: {upload_server_options}\nReceived {servers}"
+                        )
+                    server_name = server.get("name")
+                    if not server_name:
+                        logger.warning("Failed to get an upload server name")
+
+                    if server_name not in self.server_sessions:
+                        logger.info(f"Using new server connection to {server_name}")
                         timeout = aiohttp.ClientTimeout(total=self.options["timeout"])
-                        self.server_sessions[server] = aiohttp.ClientSession(
-                            f"https://{server}.gofile.io",
+                        self.server_sessions[server_name] = aiohttp.ClientSession(
+                            f"https://{server_name}.gofile.io",
                             headers=self.session_headers,
                             raise_for_status=True,
                             timeout=timeout,
                         )
 
-                    session = self.server_sessions[server]
+                    session = self.server_sessions[server_name]
 
                     # I couldn't get CallbackIOWrapper to work due to "Can not serialize value type: <class 'tqdm.utils.CallbackIOWrapper'>"
                     # Maybe someone can try and get better results
                     with TqdmUpTo(unit="B", unit_scale=True, unit_divisor=1024, miniters=1, desc=file_path.name) as t:
                         with ProgressFileReader(filename=file_path, read_callback=t.update_to) as upload_file:
+                            # FIXME: I cannot figure out this Unicode BS
+                            # Via browser uploading non-ascii chars works just fine and the file name does not appear to
+                            # be encoded in anything special.
+                            # If I copy the request as cURL I see that file name will be encoded like "\u7f8e\u306e"
+                            # When I ran the cURL this uploaded just fine and the response I got back was 美」which is correct
+                            # I tried `FormData(charset=utf-8|ascii)` as well using `file_path.name.encode('unicode_escape').decode('ascii')`
+                            # and none of this worked.
+                            # At this time I am out of ideas for a proper fix.
                             data = aiohttp.FormData()
-                            data.add_field("file", upload_file, filename=file_path.name)
+                            formatted_file_name = file_path.name
+                            data.add_field("file", upload_file, filename=formatted_file_name)
                             logger.debug(f'File "{file_path.name}" was selected for upload')
                             if folder_id:
                                 logger.debug(f'File {file_path.name} will be uploaded to folder id "{folder_id}"')

@@ -17,6 +17,7 @@ profile = "black"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
 addopts = "--cov=src/gofile_uploader -p no:warnings --cov-branch --cov-report html --cov-report xml"
 # addopts = "--cov=src/gofile_uploader --no-cov"
 
@@ -29,7 +30,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "GofileIOUploader"
-version = "0.13.1"
+version = "0.13.2"
 description = "Gofile.io uploader supporting parallel uploads"
 readme = "README.md"
 requires-python = ">=3.9"

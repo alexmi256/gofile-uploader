@@ -139,6 +139,8 @@ async def file_in_folder(base_cli_config_api_with_account_initialized, folder_fr
     content_id = folder_from_account["id"]
 
     file_uploaded = await api.upload_file(file_path, content_id)
+    assert file_uploaded.get("uploadSuccess")
+
     yield file_uploaded
 
 
