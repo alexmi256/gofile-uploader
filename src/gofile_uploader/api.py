@@ -293,6 +293,22 @@ class GofileIOAPI:
                                 file_metadata.update(response["data"])
                                 file_metadata["uploadSuccess"] = response.get("status")
                                 if file_metadata["uploadSuccess"] == "ok":
+                                    # Hacky way of dealing with the Unicode filename issue #17
+                                    if response["data"]["name"] != file_path.name:
+                                        # Rename the file we just uploaded which is a HACK
+                                        logger.debug(
+                                            f'Renaming file on server "{response["data"]["name"]}" to {file_path.name} due to Unicode being hard to deal with'
+                                        )
+                                        try:
+                                            renamed_file_response = await self.update_content(
+                                                response["data"]["id"], "name", file_path.name
+                                            )
+                                            file_metadata["name"] = renamed_file_response["data"]["name"]
+                                        except Exception as rename_error:
+                                            logger.exception(
+                                                "Rename for unicode based file name failed. Content still successfully uploaded but its name may look off.",
+                                                exc_info=rename_error,
+                                            )
                                     self.options["history"]["uploads"].append(file_metadata)
                                 return file_metadata
 
