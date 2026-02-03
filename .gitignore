@@ -165,4 +165,5 @@ gofile.env
 *.csv
 gofile-alljs-*
 gofile-globaljs-*
+gofile-configjs-*
 md5_speed.py

@@ -7,7 +7,7 @@ from pprint import pformat
 
 import aiohttp
 from tqdm.asyncio import tqdm_asyncio
-from typing_extensions import List, Literal, Optional
+from typing_extensions import List, Literal, Optional, deprecated
 
 from .types import (
     CompletedFileUploadResult,
@@ -46,6 +46,17 @@ class GofileIOAPI:
         self.server_sessions = {}
         self.created_folders = {}
         self.sem = asyncio.Semaphore(self.options["connections"])
+        self.default_servers = [
+            {"name": "upload", "zone": None},
+            {"name": "upload-na-phx", "zone": "na"},
+            {"name": "upload-eu-par", "zone": "eu"},
+            # No idea if this is real or not
+            # {'name': 'upload-eu-gra', 'zone': 'eu'},
+            {"name": "upload-sa-sao", "zone": "sa"},
+            {"name": "upload-ap-hkg", "zone": "ap"},
+            {"name": "upload-ap-sgp", "zone": "ap"},
+            {"name": "upload-ap-tyo", "zone": "ap"},
+        ]
 
     async def init(self):
         # Create an account if none was specified
@@ -72,7 +83,15 @@ class GofileIOAPI:
 
         account = await self.get_account_details(self.account_id)
         self.root_folder_id = account["data"]["rootFolder"]
-        self.is_premium = account["data"]["tier"] != "standard"
+        # I don't know the actual value for premium, so I'm reversing the common free ones
+        self.is_premium = not (account["data"]["tier"] in ["standard", "guest"])
+
+        if not self.is_premium:
+            if self.wt is None:
+                raise Exception(
+                    f"Free account used but whitelist token for premium features was not found. Create an issue."
+                )
+            self.session.headers["X-Website-Token"] = self.wt
 
     @staticmethod
     async def get_new_account() -> GetNewAccountResponse:
@@ -100,11 +119,11 @@ class GofileIOAPI:
         # Maybe one day I'll figure out what this stands for
         wt = None
         async with aiohttp.ClientSession() as session:
-            async with session.get("https://gofile.io/dist/js/global.js") as resp:
+            async with session.get("https://gofile.io/dist/js/config.js") as resp:
                 response = await resp.text()
                 if self.options.get("debug_save_js_locally"):
                     response_hash = hashlib.md5(response.encode("utf-8")).hexdigest()
-                    file_name = Path(f"gofile-globaljs-{response_hash}.js")
+                    file_name = Path(f"gofile-configjs-{response_hash}.js")
                     if file_name.exists():
                         logger.debug(f"Gofile script {file_name} was retrieved but already existed locally")
                     else:
@@ -121,7 +140,7 @@ class GofileIOAPI:
                     )
         return wt
 
-    async def get_servers(self, zone: Optional[Literal["eu", "na"]]) -> GetServersResponse:
+    async def get_servers(self, zone: Optional[Literal["eu", "na", "ap", "sa"]]) -> GetServersResponse:
         params = {"zone": zone} if zone else None
         async with self.session.get("/servers", params=params) as resp:
             response = await resp.json()
@@ -146,7 +165,18 @@ class GofileIOAPI:
         account = await self.get_account_details(self.account_id)
         self.is_premium = account["data"]["tier"] != "standard"
 
-    async def get_content(self, content_id: str, cache: Optional[bool], password: Optional[str]) -> GetContentResponse:
+    async def get_content(
+        self,
+        content_id: str,
+        cache: Optional[bool],
+        password: Optional[str],
+        page: Optional[int] = None,
+        page_size: Optional[int] = None,
+        sort_field: Optional[Literal["createTime", "name", "size", "downloads", "mimetype"]] = None,
+        sort_direction: Optional[int] = None,
+        content_filter: Optional[str] = None,
+        max_depth: Optional[int] = None,
+    ) -> GetContentResponse:
         # Requires Premium or the whitelist token
         if not self.wt:
             self.raise_error_if_not_premium_status()
@@ -163,15 +193,35 @@ class GofileIOAPI:
         if password:
             params["password"] = password
 
+        if page:
+            params["page"] = page
+        if page_size:
+            params["pageSize"] = page_size
+
+        if sort_field:
+            params["sortField"] = sort_field
+        if sort_direction:
+            params["sortDirection"] = sort_direction
+
+        if content_filter:
+            params["contentFilter"] = content_filter
+
+        if max_depth:
+            params["maxDepth"] = max_depth
+
         async with self.session.get(f"/contents/{content_id}", params=params) as resp:
             response = await resp.json()
             GofileIOAPI.raise_error_if_error_in_remote_response(response, exit_if_rate_limited=True)
             return response
 
-    async def create_folder(self, parent_folder_id: str, folder_name: Optional[str]) -> CreateFolderResponse:
+    async def create_folder(
+        self, parent_folder_id: str, folder_name: Optional[str], public: Optional[bool] = None
+    ) -> CreateFolderResponse:
         data = {"parentFolderId": parent_folder_id}
         if folder_name:
             data["folderName"] = folder_name
+        if public is not None:
+            data["public"] = public
 
         logger.debug(f"Creating new folder '{folder_name}' in parent folder id '{parent_folder_id}' ")
         async with self.session.post("/contents/createfolder", data=data) as resp:
