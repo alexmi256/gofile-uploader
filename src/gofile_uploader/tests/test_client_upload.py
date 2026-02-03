@@ -1,3 +1,6 @@
+from pathlib import Path
+from uuid import uuid4
+
 import pytest
 
 
@@ -30,3 +33,48 @@ class TestClientUpload:
         ]
         assert file_after_rename
         assert file_after_rename[0]["name"] != file_before_rename[0]["name"]
+
+    @pytest.mark.asyncio(scope="session")
+    async def test_upload_global_zone(self, initialized_client):
+        client = initialized_client
+        original_api_options = client.api.options.get("zone")
+        assert original_api_options is None
+        test_unique_id = str(uuid4())
+        file_path = Path(f"test_upload_global_zone.txt")
+        try:
+            with open(file_path, "w") as file_to_upload:
+                file_to_upload.write(test_unique_id)
+            response = await client.api.upload_file(file_path)
+            assert response["uploadSuccess"] == "ok"
+            pass
+
+        finally:
+            try:
+                file_path.unlink()
+            except FileNotFoundError:
+                pass
+
+    @pytest.mark.asyncio(scope="session")
+    @pytest.mark.parametrize("zone", ["na", "eu", "sa", "ap"])
+    async def test_upload_specific_zone(self, initialized_client, zone):
+        # TODO: These tests should be using their own ephemeral clients
+        client = initialized_client
+        original_api_options = client.api.options.get("zone")
+        assert original_api_options is None
+        client.api.options["zone"] = zone
+
+        test_unique_id = str(uuid4())
+        file_path = Path(f"test_upload_global_zone.txt")
+        try:
+            with open(file_path, "w") as file_to_upload:
+                file_to_upload.write(test_unique_id)
+            response = await client.api.upload_file(file_path)
+            assert response["uploadSuccess"] == "ok"
+
+        finally:
+            try:
+                client.api.options["zone"] = None
+                assert client.api.options["zone"] is None
+                file_path.unlink()
+            except FileNotFoundError:
+                pass
