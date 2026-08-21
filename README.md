@@ -243,11 +243,9 @@ You should disable this when debugging.
 
 # Improvements Wishlist
 - [ ] Fix website token fetching natively
-  - [ ] Figure out what obfuscated function does
+  - [x] Figure out what obfuscated function does
   - [ ] Figure out where the rotated token lives
   - [ ] Recreate the time based token
-- [ ] Fix website token fetching via some hacky way?
-  - Use a real browser to fetch this when needed 
 - [ ] Cleanup and update /servers endpoint removal
 - [ ] Paid accounts support, I don't have a paid account so I can't test
 - [ ] Add more tests
