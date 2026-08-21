@@ -8,6 +8,9 @@ build:
 release: build
     python3 -m twine upload --skip-existing --repository pypi dist/*
 
+prerelease: build
+    python3 -m twine upload --skip-existing --repository testpypi dist/*
+
 lint:
     black -l 120 -t py39 src/
     isort src/
