@@ -4,6 +4,13 @@
 A python script to upload files or directories to Gofile.io
 Built using `asyncio`, `aiohttp`, and `tqdm`
 
+# 🚨⚠️ Current Status: BROKEN! ⚠️🚨
+It looks like maybe back around maybe March 2026 Gofile started to implement a different method for storing the 
+website token (wt) that wasn't just putting it in a plain JS file. This unfortunately broke things for this uploader.
+The first trace of this was probably in https://github.com/yt-dlp/yt-dlp/issues/16117
+
+I've started looking into this.
+
 ## Supports
 - Gofile accounts
 - Private and public directory uploads
@@ -235,6 +242,10 @@ You should disable this when debugging.
 
 
 # Improvements Wishlist
+- [ ] Fix website token fetching natively
+  - [x] Figure out what obfuscated function does
+  - [ ] Figure out where the rotated token lives
+  - [ ] Recreate the time based token
 - [ ] Cleanup and update /servers endpoint removal
 - [ ] Paid accounts support, I don't have a paid account so I can't test
 - [ ] Add more tests

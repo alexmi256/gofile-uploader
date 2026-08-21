@@ -167,3 +167,6 @@ gofile-alljs-*
 gofile-globaljs-*
 gofile-configjs-*
 md5_speed.py
+obfuscated.js
+wt.obf.js
+src/deobfuscate
