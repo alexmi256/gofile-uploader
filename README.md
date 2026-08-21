@@ -235,6 +235,7 @@ You should disable this when debugging.
 
 
 # Improvements Wishlist
+- [ ] Cleanup and update /servers endpoint removal
 - [ ] Paid accounts support, I don't have a paid account so I can't test
 - [ ] Add more tests
 - [ ] Recursive directory upload support

@@ -40,7 +40,7 @@ class CreateFolderResponse(ServerResponse):
 
 class GetServersServer(TypedDict):
     name: str
-    zone: Literal["eu", "na", "ap"]
+    zone: Literal["eu", "na", "ap", "sa"]
 
 
 class GetServersData(TypedDict):

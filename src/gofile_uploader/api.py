@@ -1,13 +1,14 @@
 import asyncio
 import hashlib
 import logging
+import random
 import re
 from pathlib import Path
 from pprint import pformat
 
 import aiohttp
 from tqdm.asyncio import tqdm_asyncio
-from typing_extensions import List, Literal, Optional
+from typing_extensions import List, Literal, Optional, deprecated
 
 from .types import (
     CompletedFileUploadResult,
@@ -72,7 +73,15 @@ class GofileIOAPI:
 
         account = await self.get_account_details(self.account_id)
         self.root_folder_id = account["data"]["rootFolder"]
-        self.is_premium = account["data"]["tier"] != "standard"
+        # I don't know the actual value for premium, so I'm reversing the common free ones
+        self.is_premium = not (account["data"]["tier"] in ["standard", "guest"])
+
+        if not self.is_premium:
+            if self.wt is None:
+                raise Exception(
+                    f"Free account used but whitelist token for premium features was not found. Create an issue."
+                )
+            self.session.headers["X-Website-Token"] = self.wt
 
     @staticmethod
     async def get_new_account() -> GetNewAccountResponse:
@@ -100,11 +109,11 @@ class GofileIOAPI:
         # Maybe one day I'll figure out what this stands for
         wt = None
         async with aiohttp.ClientSession() as session:
-            async with session.get("https://gofile.io/dist/js/global.js") as resp:
+            async with session.get("https://gofile.io/dist/js/config.js") as resp:
                 response = await resp.text()
                 if self.options.get("debug_save_js_locally"):
                     response_hash = hashlib.md5(response.encode("utf-8")).hexdigest()
-                    file_name = Path(f"gofile-globaljs-{response_hash}.js")
+                    file_name = Path(f"gofile-configjs-{response_hash}.js")
                     if file_name.exists():
                         logger.debug(f"Gofile script {file_name} was retrieved but already existed locally")
                     else:
@@ -121,12 +130,40 @@ class GofileIOAPI:
                     )
         return wt
 
-    async def get_servers(self, zone: Optional[Literal["eu", "na"]]) -> GetServersResponse:
+    @deprecated("GoFile API no longer mentions this endpoint in their docs")
+    async def get_servers_old(self, zone: Optional[Literal["eu", "na", "ap", "sa"]]) -> GetServersResponse:
         params = {"zone": zone} if zone else None
         async with self.session.get("/servers", params=params) as resp:
             response = await resp.json()
             GofileIOAPI.raise_error_if_error_in_remote_response(response, exit_if_rate_limited=True)
             return response
+
+    # TODO: This likely should not be a function in API since it's not a real endpoint
+    def get_servers(self, zone: Optional[Literal["eu", "na", "ap", "sa"]]) -> GetServersResponse:
+        # For the new 2026 suggested server lookup we just have a static list of servers
+        # In practice just like the last servers API I don't know how muich trust you can put in these "regions"
+        # I definitely had SA and AP zones returining same upload server as NA and EU
+        all_servers = [
+            {"name": "upload-na-phx", "zone": "na"},
+            {"name": "upload-eu-par", "zone": "eu"},
+            # No idea if this is real or not but it looks like it according to real API
+            # {'name': 'upload-eu-gra', 'zone': 'eu'},
+            {"name": "upload-sa-sao", "zone": "sa"},
+            {"name": "upload-ap-hkg", "zone": "ap"},
+            {"name": "upload-ap-sgp", "zone": "ap"},
+            {"name": "upload-ap-tyo", "zone": "ap"},
+        ]
+        if zone is None:
+            return {
+                "status": "ok",
+                "data": {"servers": all_servers, "serversAllZone": all_servers},
+            }
+        else:
+            possible_region_servers = [x for x in all_servers if x["zone"] == zone]
+            return {
+                "status": "ok",
+                "data": {"servers": possible_region_servers, "serversAllZone": all_servers},
+            }
 
     async def get_account_id(self) -> GetAccountIdResponse:
         async with self.session.get("/accounts/getid") as resp:
@@ -146,7 +183,18 @@ class GofileIOAPI:
         account = await self.get_account_details(self.account_id)
         self.is_premium = account["data"]["tier"] != "standard"
 
-    async def get_content(self, content_id: str, cache: Optional[bool], password: Optional[str]) -> GetContentResponse:
+    async def get_content(
+        self,
+        content_id: str,
+        cache: Optional[bool],
+        password: Optional[str],
+        page: Optional[int] = None,
+        page_size: Optional[int] = None,
+        sort_field: Optional[Literal["createTime", "name", "size", "downloads", "mimetype"]] = None,
+        sort_direction: Optional[int] = None,
+        content_filter: Optional[str] = None,
+        max_depth: Optional[int] = None,
+    ) -> GetContentResponse:
         # Requires Premium or the whitelist token
         if not self.wt:
             self.raise_error_if_not_premium_status()
@@ -163,15 +211,35 @@ class GofileIOAPI:
         if password:
             params["password"] = password
 
+        if page:
+            params["page"] = page
+        if page_size:
+            params["pageSize"] = page_size
+
+        if sort_field:
+            params["sortField"] = sort_field
+        if sort_direction:
+            params["sortDirection"] = sort_direction
+
+        if content_filter:
+            params["contentFilter"] = content_filter
+
+        if max_depth:
+            params["maxDepth"] = max_depth
+
         async with self.session.get(f"/contents/{content_id}", params=params) as resp:
             response = await resp.json()
             GofileIOAPI.raise_error_if_error_in_remote_response(response, exit_if_rate_limited=True)
             return response
 
-    async def create_folder(self, parent_folder_id: str, folder_name: Optional[str]) -> CreateFolderResponse:
+    async def create_folder(
+        self, parent_folder_id: str, folder_name: Optional[str], public: Optional[bool] = None
+    ) -> CreateFolderResponse:
         data = {"parentFolderId": parent_folder_id}
         if folder_name:
             data["folderName"] = folder_name
+        if public is not None:
+            data["public"] = public
 
         logger.debug(f"Creating new folder '{folder_name}' in parent folder id '{parent_folder_id}' ")
         async with self.session.post("/contents/createfolder", data=data) as resp:
@@ -223,28 +291,39 @@ class GofileIOAPI:
                     # (but I've also seen this not happen) and also a 'server: "noServer"' response back.
                     # In this case I believe we should rely on the servers provided in the serversAllZone list
                     upload_server_options = self.options.get("zone")
-                    key_name_for_servers_list = "servers"
-                    servers = await self.get_servers(zone=upload_server_options)
+                    if upload_server_options is None:
+                        # Use the automatic server
+                        server_name = "upload"
+                    else:
+                        # Use a region specific server that we've now mocked in the API because official API docs
+                        # no longer show /servers as being a valid endpoint. However, the endpoint still kinda works to
+                        # this day so I just mocked it with the recommended servers zones and names as this meant I
+                        # would not need to change this logic much in case it got worse performance
+                        # TODO: I need to move away from just zones and allow the user to specify the full endpoint
 
-                    if servers.get("status") == "noServer":
-                        if upload_server_options is None:
-                            # Get a random server from the ServersAllZone
-                            key_name_for_servers_list = "serversAllZone"
-                        else:
-                            # TODO: Allow failing uploads if undesired server region was not found
-                            key_name_for_servers_list = "serversAllZone"
-                            logger.warning(
-                                f"Could not find server from specified region: {upload_server_options}."
-                                f"A random server from a random region will be used instead."
-                                f"A future option will allow failing if the specified server region was unattainable"
+                        key_name_for_servers_list = "servers"
+                        servers = self.get_servers(zone=upload_server_options)
+
+                        if servers.get("status") == "noServer":
+                            if upload_server_options is None:
+                                # Get a random server from the ServersAllZone
+                                key_name_for_servers_list = "serversAllZone"
+                            else:
+                                # TODO: Allow failing uploads if undesired server region was not found
+                                key_name_for_servers_list = "serversAllZone"
+                                logger.warning(
+                                    f"Could not find server from specified region: {upload_server_options}."
+                                    f"A random server from a random region will be used instead."
+                                    f"A future option will allow failing if the specified server region was unattainable"
+                                )
+
+                        server = next(iter(servers.get("data", {}).get(key_name_for_servers_list, [])), None)
+                        if not server:
+                            logger.error(
+                                f"No upload servers were found!\nRequested: {upload_server_options}\nReceived {servers}"
                             )
+                        server_name = server.get("name")
 
-                    server = next(iter(servers.get("data", {}).get(key_name_for_servers_list, [])), None)
-                    if not server:
-                        logger.error(
-                            f"No upload servers were found!\nRequested: {upload_server_options}\nReceived {servers}"
-                        )
-                    server_name = server.get("name")
                     if not server_name:
                         logger.warning("Failed to get an upload server name")
 
