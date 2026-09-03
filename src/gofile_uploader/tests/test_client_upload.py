@@ -55,7 +55,19 @@ class TestClientUpload:
                 pass
 
     @pytest.mark.asyncio(scope="session")
-    @pytest.mark.parametrize("zone", ["na", "eu", "sa", "ap"])
+    @pytest.mark.parametrize(
+        "zone",
+        [
+            "upload-na-nyc",
+            "upload-na-phx",
+            "upload-eu-par",
+            "upload-ap-sgp",
+            "upload-ap-tyo",
+            "upload-ap-hkg",
+            "upload-ap-syd",
+            "upload-sa-sao",
+        ],
+    )
     async def test_upload_specific_zone(self, initialized_client, zone):
         # TODO: These tests should be using their own ephemeral clients
         client = initialized_client

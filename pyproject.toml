@@ -24,6 +24,17 @@ addopts = "--cov=src/gofile_uploader -p no:warnings --cov-branch --cov-report ht
 [tool.coverage.run]
 omit = ["src/gofile_uploader/tests/*", "__init__.py", "conftest.py"]
 
+[tool.pyrefly]
+project-includes = [
+    "src/gofile_uploader/"
+]
+project-excludes = [
+    "src/gofile_uploader/tests/"
+]
+search-path = [
+    "src/gofile_uploader/"
+]
+
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"

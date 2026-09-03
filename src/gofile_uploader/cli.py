@@ -69,7 +69,17 @@ def cli(argparse_arguments: list[str]) -> GofileUploaderOptions:
         "-z",
         "--zone",
         type=str,
-        choices=["na", "eu", "ap", "sa"],
+        default="upload",
+        choices=[
+            "upload-na-nyc",
+            "upload-na-phx",
+            "upload-eu-par",
+            "upload-ap-sgp",
+            "upload-ap-tyo",
+            "upload-ap-hkg",
+            "upload-ap-syd",
+            "upload-sa-sao",
+        ],
         help="Server zone to prefer uploading to",
     )
     parser.add_argument(

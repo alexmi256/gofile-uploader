@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from typing_extensions import (
+    Any,
     Literal,
     NotRequired,
     Optional,
@@ -40,7 +41,16 @@ class CreateFolderResponse(ServerResponse):
 
 class GetServersServer(TypedDict):
     name: str
-    zone: Literal["eu", "na", "ap", "sa"]
+    zone: Literal[
+        "upload-na-nyc",
+        "upload-na-phx",
+        "upload-eu-par",
+        "upload-ap-sgp",
+        "upload-ap-tyo",
+        "upload-ap-hkg",
+        "upload-ap-syd",
+        "upload-sa-sao",
+    ]
 
 
 class GetServersData(TypedDict):
@@ -56,15 +66,39 @@ class GetAccountDetailsStatsCurrentData(TypedDict):
     fileCount: int
     folderCount: int
     storage: int
+    trafficWebDownloaded: int
+
+
+class GetAccountDetailsIpInfoData(TypedDict):
+    _id: str
+    asnDomain: str
+    asnName: str
+    asnNumber: str
+    asnType: str
+    cidr: str
+    country: str
+    createdAt: int
+    endIp: int
+    ipVersion: int
+    netblockDomain: str
+    netblockId: str
+    netblockName: str
+    netblockSize: str
+    netblockStatus: str
+    startIp: int
 
 
 class GetAccountDetailsData(TypedDict):
+    # This is a 'year': {'month': {'day'}: int} format that I don't care too much about
+    ipinfo: type[Any]
     id: str
+    createdTime: int
     email: str
     tier: str
     token: str
     rootFolder: str
     statsCurrent: GetAccountDetailsStatsCurrentData
+    ipinfo: GetAccountDetailsIpInfoData
     # filesCount: int
     # total30DDLTraffic: int
     # credit: int
@@ -185,11 +219,11 @@ class DeleteContentsResponse(ServerResponse):
     data: dict[str, UpdateContentResponse]
 
 
-class CompletedFileUploadResult(UploadFileData):
+class CompletedFileUploadResult(TypedDict):
     filePath: str
     filePathMD5: str
     fileNameMD5: str
-    uploadSuccess: Optional[str]
+    response: Optional[UploadFileResponse]
 
 
 class GofileCLIArgs(TypedDict):
@@ -219,6 +253,7 @@ class GofileUploaderLocalConfigOptions(TypedDict):
     save: Optional[bool]
     retries: Optional[int]
     history: GofileUploaderLocalConfigHistory
+    website_token_salts: Optional[dict[str, str]]
     recurse_directories: Optional[bool]
     recurse_max: Optional[int]
     hash_pool_size: Optional[int]

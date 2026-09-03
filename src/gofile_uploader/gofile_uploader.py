@@ -16,6 +16,7 @@ from typing_extensions import List, Optional, cast
 
 from .api import GofileIOAPI
 from .cli import cli
+from .latest_salt import DATE, SALT
 from .types import CompletedFileUploadResult, GofileUploaderOptions
 from .utils import return_dict_without_none_value_keys
 
@@ -61,8 +62,14 @@ class GofileIOUploader:
                     "retries": self.options.get("retries"),
                     "recurse_directories": self.options.get("recurse_directories"),
                     "recurse_max": self.options.get("recurse_max"),
+                    "website_token_salts": self.options.get("website_token_salts", {}),
                     "history": config_history,
                 }
+                savable_config["website_token_salts"].update(
+                    {
+                        DATE: SALT,
+                    }
+                )
                 logger.debug(pformat(savable_config))
                 config = return_dict_without_none_value_keys(savable_config)
                 json.dump(config, config_file, indent=2)

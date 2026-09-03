@@ -1,3 +1,5 @@
 aiohttp
 tqdm
 typing-extensions
+pythonmonkey
+ua-generator

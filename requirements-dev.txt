@@ -1,13 +1,16 @@
 aiohttp
 tqdm
+typing-extensions
+pythonmonkey
+ua-generator
 black
 isort
 pre-commit
 twine >=6.1.0
 build
-typing-extensions
 pytest
 pytest-asyncio
 pydantic
 pytest-cov
 packaging >= 24.2
+pyrefly

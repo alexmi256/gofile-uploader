@@ -33,6 +33,7 @@ BASE_CONFIG = {
     "hash_pool_size": 1,
     "config_file_path": None,
     "config_directory": None,
+    "website_token_salts": {},
 }
 
 

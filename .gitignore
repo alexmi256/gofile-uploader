@@ -166,7 +166,9 @@ gofile.env
 gofile-alljs-*
 gofile-globaljs-*
 gofile-configjs-*
+gofile-wtobfjs-*
 md5_speed.py
 obfuscated.js
 wt.obf.js
 src/deobfuscate
+*.obfuscated.js
